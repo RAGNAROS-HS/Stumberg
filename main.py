@@ -4,6 +4,7 @@ from langchain_openai import ChatOpenAI
 from langchain.agents.middleware import wrap_model_call, ModelRequest, ModelResponse, wrap_tool_call
 from langchain.tools import tool
 from langchain.messages import ToolMessage
+from tools.weather import get_weather
 from dotenv import load_dotenv
 import os
 
@@ -29,11 +30,6 @@ advanced_model = ChatOpenAI(
 def search(query: str) -> str:
     """Search for information."""
     return f"Results for: {query}"
-
-@tool
-def get_weather(location: str) -> str:
-    """Get weather information for a location."""
-    return f"Weather in {location}: Sunny, 72°F"
 
 #this whole section is a bit useless atm, but im putting it down for potential future work on dynamic model selection depending on condition
 @wrap_model_call
