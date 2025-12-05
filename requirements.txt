@@ -10,3 +10,4 @@ numpy>=1.24.0
 perplexityai>=0.17.0
 langchain-pinecone>=0.2.13
 langchain-perplexity>=1.1.0
+langchain-openai>=1.1.0
