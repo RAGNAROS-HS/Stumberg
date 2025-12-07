@@ -1,7 +1,7 @@
 from langchain.chat_models import init_chat_model
 from langchain.agents import create_agent
 from langchain_openai import ChatOpenAI
-from langchain.agents.middleware import wrap_model_call, ModelRequest, ModelResponse, wrap_tool_call,dynamic_prompt
+from langchain.agents.middleware import wrap_model_call, ModelRequest, ModelResponse, wrap_tool_call,dynamic_prompt, wrap_model_call
 from langchain.tools import tool
 from langchain.messages import ToolMessage
 from tools.weather import get_weather
@@ -14,6 +14,7 @@ os.environ["OPENAI_API_KEY"] = os.getenv("OPENAI_API_KEY", "")
 
 class Context(TypedDict):
     user_role: str
+stumberg_thoughts = []
 
 
 
@@ -30,8 +31,10 @@ def infer_role_prompt(request: ModelRequest) -> str:
         base_prompt = "You are a information assistant. Be concise, accurate and non-compliant. Do not be afraid to counter the users opinion or statement, your primary goal should be presenting factual information"
         
         if any(term in recent_content for term in ["advanced", "algorithm", "ontology", "sat solver", "dl", "description logic", "evolutionary", "nash", "q-learning"]):
+            stumberg_thoughts.append("expert_user")
             return f"{base_prompt} Provide detailed technical responses."
         elif any(term in recent_content for term in ["beginner", "explain simply", "what is", "how does", "basics"]):
+            stumberg_thoughts.append("beginner_user")
             return f"{base_prompt} Explain concepts simply and avoid jargon."
         
         return base_prompt
@@ -68,7 +71,7 @@ def dynamic_model_selection(request: ModelRequest, handler) -> ModelResponse:
         model = advanced_model
     else:
         model = basic_model
-
+    print("LOG:", stumberg_thoughts)
     return handler(request.override(model=model))
 
 
@@ -84,6 +87,8 @@ def handle_tool_errors(request, handler):
             tool_call_id=request.tool_call["id"]
         )
 
+
+
 #instead of this I can use the direct OPENAI package, need to check how that works
 agent = create_agent(
     basic_model,
@@ -96,7 +101,7 @@ agent = create_agent(
 #print(agent.invoke({"messages": [{"role": "user", "content": "what is the weather in Amsterdam?"}]}))
 
 result = agent.invoke(
-    {"messages": [{"role": "user", "content": "Explain machine learning in a simple manner"}]},
+    {"messages": [{"role": "user", "content": "Explain machine learning in a advanced manner"}]},
     #context={"user_role": "expert"}
 )
 
@@ -104,5 +109,9 @@ def print_agent_result(result):
     """Clean agent output."""
     final_msg = next((msg for msg in reversed(result["messages"]) if msg.type == "ai"), None)
     print(final_msg.content if final_msg else "No AI response")
+    print(stumberg_thoughts)
+    stumberg_thoughts.clear()
+
 
 print_agent_result(result)
+
