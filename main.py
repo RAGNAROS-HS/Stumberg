@@ -4,6 +4,10 @@ from langchain_openai import ChatOpenAI
 from langchain.agents.middleware import wrap_model_call, ModelRequest, ModelResponse, wrap_tool_call,dynamic_prompt, wrap_model_call
 from langchain.tools import tool
 from langchain.messages import ToolMessage
+from langgraph.checkpoint.postgres import PostgresSaver  
+
+
+
 from tools.weather import get_weather
 from dotenv import load_dotenv
 import os
@@ -18,9 +22,13 @@ os.environ["LANGCHAIN_API_KEY"] = os.getenv("LANGCHAIN_API_KEY", "")
 os.environ["LANGCHAIN_PROJECT"] = "pr-whispered-density-79"
 
 
+DB_URI = "postgresql://postgres:your_password@localhost:5432/langgraph_db?sslmode=disable"
+checkpointer = PostgresSaver.from_conn_string(DB_URI)
+checkpointer.setup()  # Creates tables (run once)
+
+
 class Context(TypedDict):
     user_role: str
-stumberg_thoughts = []
 
 
 
@@ -75,7 +83,7 @@ def dynamic_model_selection(request: ModelRequest, handler) -> ModelResponse:
         model = advanced_model
     else:
         model = basic_model
-    print("LOG:", stumberg_thoughts)
+
     return handler(request.override(model=model))
 
 
@@ -98,6 +106,7 @@ agent = create_agent(
     basic_model,
     tools=[get_weather, search],
     middleware=[dynamic_model_selection, infer_role_prompt],
+    checkpointer=checkpointer, 
     context_schema=Context
 )#you can give much more detail here, much more data
 
@@ -106,6 +115,7 @@ agent = create_agent(
 
 result = agent.invoke(
     {"messages": [{"role": "user", "content": "Explain machine learning in a advanced manner"}]},
+    config={"configurable": {"thread_id": "session_1"}}
     #context={"user_role": "expert"}
 )
 
@@ -113,8 +123,7 @@ def print_agent_result(result):
     """Clean agent output."""
     final_msg = next((msg for msg in reversed(result["messages"]) if msg.type == "ai"), None)
     print(final_msg.content if final_msg else "No AI response")
-    print(stumberg_thoughts)
-    stumberg_thoughts.clear()
+    print(f"Persisted state history length: {len(result['messages'])}")
 
 
 print_agent_result(result)
