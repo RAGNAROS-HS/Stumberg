@@ -12,6 +12,12 @@ from typing import TypedDict
 load_dotenv()
 os.environ["OPENAI_API_KEY"] = os.getenv("OPENAI_API_KEY", "")
 
+os.environ["LANGCHAIN_TRACING"] = "true"
+os.environ["LANGCHAIN_ENDPOINT"] = "https://eu.api.smith.langchain.com"
+os.environ["LANGCHAIN_API_KEY"] = os.getenv("LANGCHAIN_API_KEY", "")
+os.environ["LANGCHAIN_PROJECT"] = "pr-whispered-density-79"
+
+
 class Context(TypedDict):
     user_role: str
 stumberg_thoughts = []
@@ -31,10 +37,8 @@ def infer_role_prompt(request: ModelRequest) -> str:
         base_prompt = "You are a information assistant. Be concise, accurate and non-compliant. Do not be afraid to counter the users opinion or statement, your primary goal should be presenting factual information"
         
         if any(term in recent_content for term in ["advanced", "algorithm", "ontology", "sat solver", "dl", "description logic", "evolutionary", "nash", "q-learning"]):
-            stumberg_thoughts.append("expert_user")
             return f"{base_prompt} Provide detailed technical responses."
         elif any(term in recent_content for term in ["beginner", "explain simply", "what is", "how does", "basics"]):
-            stumberg_thoughts.append("beginner_user")
             return f"{base_prompt} Explain concepts simply and avoid jargon."
         
         return base_prompt
