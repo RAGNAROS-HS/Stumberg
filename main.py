@@ -20,11 +20,9 @@ os.environ["LANGCHAIN_TRACING"] = "true"
 os.environ["LANGCHAIN_ENDPOINT"] = "https://eu.api.smith.langchain.com"
 os.environ["LANGCHAIN_API_KEY"] = os.getenv("LANGCHAIN_API_KEY", "")
 os.environ["LANGCHAIN_PROJECT"] = "pr-whispered-density-79"
+DB_URI = os.getenv("DB_URI", "")
 
 
-DB_URI = "postgresql://postgres:your_password@localhost:5432/langgraph_db?sslmode=disable"
-checkpointer = PostgresSaver.from_conn_string(DB_URI)
-checkpointer.setup()  # Creates tables (run once)
 
 
 class Context(TypedDict):
@@ -101,30 +99,34 @@ def handle_tool_errors(request, handler):
 
 
 
+
 #instead of this I can use the direct OPENAI package, need to check how that works
-agent = create_agent(
-    basic_model,
-    tools=[get_weather, search],
-    middleware=[dynamic_model_selection, infer_role_prompt],
-    checkpointer=checkpointer, 
-    context_schema=Context
-)#you can give much more detail here, much more data
+with PostgresSaver.from_conn_string(DB_URI) as checkpointer:
+    checkpointer.setup()  # Creates tables (run once)
+    
+    agent = create_agent(
+        basic_model,
+        tools=[get_weather, search],
+        middleware=[dynamic_model_selection, infer_role_prompt],
+        checkpointer=checkpointer, 
+        context_schema=Context
+    )#you can give much more detail here, much more data
 
 
-#print(agent.invoke({"messages": [{"role": "user", "content": "what is the weather in Amsterdam?"}]}))
+    #print(agent.invoke({"messages": [{"role": "user", "content": "what is the weather in Amsterdam?"}]}))
 
-result = agent.invoke(
-    {"messages": [{"role": "user", "content": "Explain machine learning in a advanced manner"}]},
-    config={"configurable": {"thread_id": "session_1"}}
-    #context={"user_role": "expert"}
-)
+    result = agent.invoke(
+        {"messages": [{"role": "user", "content": "Explain machine learning in a advanced manner"}]},
+        config={"configurable": {"thread_id": "session_1"}}
+        #context={"user_role": "expert"}
+    )
 
-def print_agent_result(result):
-    """Clean agent output."""
-    final_msg = next((msg for msg in reversed(result["messages"]) if msg.type == "ai"), None)
-    print(final_msg.content if final_msg else "No AI response")
-    print(f"Persisted state history length: {len(result['messages'])}")
+    def print_agent_result(result):
+        """Clean agent output."""
+        final_msg = next((msg for msg in reversed(result["messages"]) if msg.type == "ai"), None)
+        print(final_msg.content if final_msg else "No AI response")
+        print(f"Persisted state history length: {len(result['messages'])}")
 
 
-print_agent_result(result)
+    print_agent_result(result)
 
