@@ -4,7 +4,7 @@ from langchain.agents.middleware import dynamic_prompt, ModelRequest
 def infer_role_prompt(request: ModelRequest) -> str:
     """Infer user role from conversation history."""
     try:
-        messages = request.runtime.state.get("messages", [])
+        messages = request.state.get("messages", [])
         recent_content = " ".join(
             msg.content.lower() for msg in messages[-8:] 
             if hasattr(msg, 'content') and msg.content
