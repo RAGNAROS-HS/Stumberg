@@ -2,7 +2,7 @@ from langchain.agents import create_agent
 from langgraph.checkpoint.postgres import PostgresSaver
 from tools.weather import get_weather
 from tools.search import search
-from middleware import infer_role_prompt, dynamic_model_selection, handle_tool_errors
+from middleware import dynamic_model_selection
 from schema import Context
 from models import basic_model, advanced_model
 from dotenv import load_dotenv
@@ -10,7 +10,6 @@ import os
 
 load_dotenv()
 os.environ["OPENAI_API_KEY"] = os.getenv("OPENAI_API_KEY", "")
-
 os.environ["LANGCHAIN_TRACING"] = "true"
 os.environ["LANGCHAIN_ENDPOINT"] = "https://eu.api.smith.langchain.com"
 os.environ["LANGCHAIN_API_KEY"] = os.getenv("LANGCHAIN_API_KEY", "")
@@ -21,7 +20,7 @@ def get_agent_graph(checkpointer):
     agent = create_agent(
         basic_model,
         tools=[get_weather, search],
-        middleware=[dynamic_model_selection, infer_role_prompt],
+        middleware=[dynamic_model_selection],
         checkpointer=checkpointer, 
         context_schema=Context
     )
