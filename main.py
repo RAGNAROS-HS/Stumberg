@@ -2,10 +2,12 @@ from langchain.agents import create_agent
 from langgraph.checkpoint.postgres import PostgresSaver
 from tools.weather import get_weather
 from tools.search import search
+from tools.vector_search import retrieve_context
 from middleware import dynamic_model_selection
 from schema import Context
 from models import basic_model, advanced_model
 from dotenv import load_dotenv
+from pinecone import Pinecone
 import os
 
 load_dotenv()
@@ -24,7 +26,7 @@ index = pc.Index("stumberg1")
 def get_agent_graph(checkpointer):
     agent = create_agent(
         basic_model,
-        tools=[get_weather, search],
+        tools=[get_weather, search, retrieve_context],
         middleware=[dynamic_model_selection],
         checkpointer=checkpointer, 
         context_schema=Context
