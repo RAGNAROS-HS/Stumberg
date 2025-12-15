@@ -9,3 +9,4 @@ def search(question: str) -> str:
     client = LinkupClient(api_key=LINKUP_API_KEY)
     response = client.search(query=question, depth = "standard", output_type="searchResults", include_images=False)
     return response
+#testing tsting

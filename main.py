@@ -14,7 +14,12 @@ os.environ["LANGCHAIN_TRACING"] = "true"
 os.environ["LANGCHAIN_ENDPOINT"] = "https://eu.api.smith.langchain.com"
 os.environ["LANGCHAIN_API_KEY"] = os.getenv("LANGCHAIN_API_KEY", "")
 os.environ["LANGCHAIN_PROJECT"] = "pr-whispered-density-79"
+PINECONE_API_KEY = os.getenv("PINECONE_API_KEY", "")
 DB_URI = os.getenv("DB_URI", "")
+
+#pinecone setup
+pc = Pinecone(api_key=PINECONE_API_KEY)
+index = pc.Index("stumberg1")
 
 def get_agent_graph(checkpointer):
     agent = create_agent(
