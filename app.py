@@ -5,11 +5,22 @@ from main import get_agent_graph, DB_URI
 from langchain_core.messages import HumanMessage, AIMessage
 import psycopg
 
-st.set_page_config(page_title="Stumberg Agent", page_icon="🤖")
+USER_AVATAR = "👤"
+BOT_AVATAR = "🤖"
+
+st.set_page_config(page_title="Stumberg Agent", page_icon="misc/stumlogo.png")
+
+st.markdown("""
+<style>
+    div[data-testid="stButton"] > button {
+        border: none !important;
+        box-shadow: none !important;
+    }
+</style>
+""", unsafe_allow_html=True)
 
 st.title("Stumberg Agent")
 
-# Define helper functions
 def get_available_threads():
     """Fetch distinct thread IDs from the database."""
     try:
@@ -74,10 +85,8 @@ try:
             # Thread Selection - Scrollable List
             available_threads = get_available_threads()
             
-            # Container for scrollable list (requires streamlit >= 1.30)
-            # If using older streamlit, this will just be a linear list which is also fine for now
-            # but st.container(height=...) is the way to go.
-            with st.container(height=400):
+            # Container for scrollable list
+            with st.container(height="stretch"):
                 for tid in available_threads:
                     title = get_thread_title(tid, agent)
                     
@@ -104,10 +113,10 @@ try:
         # Display Chat History
         for message in st.session_state.messages:
             if isinstance(message, HumanMessage):
-                with st.chat_message("user"):
+                with st.chat_message("user", avatar=USER_AVATAR):
                     st.markdown(message.content)
             elif isinstance(message, AIMessage):
-                with st.chat_message("assistant"):
+                with st.chat_message("assistant", avatar=BOT_AVATAR):
                     st.markdown(message.content)
 
         # Handle User Input
@@ -117,11 +126,11 @@ try:
                  st.session_state.messages = []
             st.session_state.messages.append(user_message)
             
-            with st.chat_message("user"):
+            with st.chat_message("user", avatar=USER_AVATAR):
                 st.markdown(prompt)
 
             # Process with Agent
-            with st.chat_message("assistant"):
+            with st.chat_message("assistant", avatar=BOT_AVATAR):
                 message_placeholder = st.empty()
                 message_placeholder.markdown("Thinking...")
                 
