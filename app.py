@@ -3,6 +3,7 @@ import uuid
 from langgraph.checkpoint.postgres import PostgresSaver
 from main import get_agent_graph, DB_URI
 from langchain_core.messages import HumanMessage, AIMessage
+from state import STATE
 import psycopg
 
 USER_AVATAR = "👤"
@@ -63,6 +64,9 @@ def get_thread_title(thread_id, agent):
 if "thread_id" not in st.session_state:
     st.session_state.thread_id = str(uuid.uuid4())
 
+if "choice" not in st.session_state:
+    st.session_state.choice = None
+
 # Main Chat Logic with Single Agent Initialization
 try:
     with PostgresSaver.from_conn_string(DB_URI) as checkpointer:
@@ -77,6 +81,7 @@ try:
             if st.button("New Chat", type="primary", use_container_width=True):
                 st.session_state.thread_id = str(uuid.uuid4())
                 st.session_state.messages = []
+                st.session_state.choice = None
                 st.rerun()
 
             st.markdown("---")
@@ -97,61 +102,106 @@ try:
                          if tid != st.session_state.thread_id:
                             st.session_state.thread_id = tid
                             st.session_state.messages = []
+                            st.session_state.choice = "loaded"
+                            #not sure this should be the case, maybe I want to ask every chat switch
                             st.rerun()
 
             st.caption(f"Current ID: {st.session_state.thread_id}")
 
-        # Load Chat History from DB (syncing)
-        config = {"configurable": {"thread_id": st.session_state.thread_id}}
-        current_state = agent.get_state(config)
+        if st.session_state.choice is None:
+            st.markdown("""
+            <style>
+            div[data-testid="stVerticalBlock"] div[data-testid="stButton"] > button {
+                height: 15vh;
+                width: 100%;
+                font-size: 1.5rem;
+                margin-bottom: 10px;
+            }
+            </style>
+            """, unsafe_allow_html=True)
+            
+            # Welcome Screen Options
+            st.subheader("Choose your mode")
+            
+            c1 = st.container()
+            with c1:
+                if st.button("Work", key="opt1", use_container_width=True):
+                    st.session_state.choice = "work"
+                    STATE.mode = "work"
+                    st.rerun()
+            
+            c2 = st.container()
+            with c2:
+                if st.button("Personal", key="opt2", use_container_width=True):
+                    st.session_state.choice = "personal"
+                    STATE.mode = "personal"
+                    st.rerun()
+            
+            c3 = st.container()
+            with c3:
+                if st.button("Code", key="opt3", use_container_width=True):
+                    st.session_state.choice = "code"
+                    STATE.mode = "code"
+                    st.rerun()
+            
+            c4 = st.container()
+            with c4:
+                if st.button("Fast", key="opt4", use_container_width=True):
+                    st.session_state.choice = "fast"
+                    STATE.mode = "fast"
+                    st.rerun()  
         
-        if current_state.values and "messages" in current_state.values:
-            st.session_state.messages = current_state.values["messages"]
-        elif "messages" not in st.session_state:
-            st.session_state.messages = []
+        else:
+            # Load Chat History from DB (syncing)
+            config = {"configurable": {"thread_id": st.session_state.thread_id}}
+            current_state = agent.get_state(config)
             
-        # Display Chat History
-        for message in st.session_state.messages:
-            if isinstance(message, HumanMessage):
-                with st.chat_message("user", avatar=USER_AVATAR):
-                    st.markdown(message.content)
-            elif isinstance(message, AIMessage):
-                with st.chat_message("assistant", avatar=BOT_AVATAR):
-                    st.markdown(message.content)
-
-        # Handle User Input
-        if prompt := st.chat_input("What's on your mind?"):
-            user_message = HumanMessage(content=prompt)
-            if not isinstance(st.session_state.messages, list):
-                 st.session_state.messages = []
-            st.session_state.messages.append(user_message)
-            
-            with st.chat_message("user", avatar=USER_AVATAR):
-                st.markdown(prompt)
-
-            # Process with Agent
-            with st.chat_message("assistant", avatar=BOT_AVATAR):
-                message_placeholder = st.empty()
-                message_placeholder.markdown("Thinking...")
+            if current_state.values and "messages" in current_state.values:
+                st.session_state.messages = current_state.values["messages"]
+            elif "messages" not in st.session_state:
+                st.session_state.messages = []
                 
-                try:
-                    result = agent.invoke({"messages": [user_message]}, config=config)
-                    final_msg = next((msg for msg in reversed(result["messages"]) if msg.type == "ai"), None)
+            # Display Chat History
+            for message in st.session_state.messages:
+                if isinstance(message, HumanMessage):
+                    with st.chat_message("user", avatar=USER_AVATAR):
+                        st.markdown(message.content)
+                elif isinstance(message, AIMessage):
+                    with st.chat_message("assistant", avatar=BOT_AVATAR):
+                        st.markdown(message.content)
+
+            # Handle User Input
+            if prompt := st.chat_input("What's on your mind?"):
+                user_message = HumanMessage(content=prompt)
+                if not isinstance(st.session_state.messages, list):
+                     st.session_state.messages = []
+                st.session_state.messages.append(user_message)
+                
+                with st.chat_message("user", avatar=USER_AVATAR):
+                    st.markdown(prompt)
+
+                # Process with Agent
+                with st.chat_message("assistant", avatar=BOT_AVATAR):
+                    message_placeholder = st.empty()
+                    message_placeholder.markdown("Thinking...")
                     
-                    if final_msg:
-                        response_content = final_msg.content
-                        message_placeholder.markdown(response_content)
-                        st.session_state.messages.append(final_msg)
+                    try:
+                        result = agent.invoke({"messages": [user_message]}, config=config)
+                        final_msg = next((msg for msg in reversed(result["messages"]) if msg.type == "ai"), None)
                         
-                        # Invalidate title cache for this thread if it was "New Chat" or different
-                        # (simple optimization: just always clear it to force refresh next sidebar render)
-                        if st.session_state.thread_id in st.session_state.get("titles", {}):
-                            del st.session_state.titles[st.session_state.thread_id]
-                    else:
-                        message_placeholder.markdown("*No response from agent.*")
-                        
-                except Exception as e:
-                    message_placeholder.error(f"Error invoking agent: {str(e)}")
+                        if final_msg:
+                            response_content = final_msg.content
+                            message_placeholder.markdown(response_content)
+                            st.session_state.messages.append(final_msg)
+                            
+                            # Invalidate title cache for this thread
+                            if st.session_state.thread_id in st.session_state.get("titles", {}):
+                                del st.session_state.titles[st.session_state.thread_id]
+                        else:
+                            message_placeholder.markdown("*No response from agent.*")
+                            
+                    except Exception as e:
+                        message_placeholder.error(f"Error invoking agent: {str(e)}")
 
 except Exception as e:
     st.error(f"Failed to initialize agent or connect to database: {e}")
