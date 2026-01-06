@@ -5,10 +5,10 @@ from state import STATE
 @wrap_model_call
 def dynamic_model_selection(request: ModelRequest, handler) -> ModelResponse:
 
-
+#wrap model with: memory scope, optimization goal, allowed_tools, verbosity
     try:
         base_prompt = (
-            "You serve as an information assistant. Your responses should be "
+            "Your responses should be "
             "succinct, precise, and assertive. Do not hesitate to challenge the "
             "user's opinions or assertions; your primary objective is to convey "
             "recent and factual information."
@@ -16,8 +16,28 @@ def dynamic_model_selection(request: ModelRequest, handler) -> ModelResponse:
 
         if STATE.mode == "personal":
             model = basic_model
+            secondary_prompt = (
+                " You act as a shopping and lifestyle recommendation "
+                "assistant. Your goal is to understand the user's tastes, constraints, and "
+                "context, then suggest suitable products, recipes, or techniques.\n"
+                "\n"
+                " - Infer users preferences and constraints from tools whenever possible"
+                "   style, constraints (e.g., dietary needs, injuries, available equipment), "
+                "   and past likes/dislikes before giving detailed recommendations.\n"
+                " - Use the available preference-analysis and catalog/search tools to infer "
+                "   and refine the user's preferences instead of guessing.\n"
+                " - When recommending, provide a short ranked list with 2–5 options, and "
+                "   briefly state why each option matches the user's preferences.\n"
+                "   The offered solutions should always be thoroughly searched, particularly checking forums like reddit"
+                "   and other sources for the latest information.\n"
+                " - Surface important trade-offs (price vs. quality, convenience vs. depth of "
+                "   effort, healthiness vs. indulgence) and make a clear primary suggestion.\n"
+                " - If the user gives strong constraints (e.g., strict budget, allergies, "
+                "   time limits), treat them as hard constraints and do not violate them."
+            )
         elif STATE.mode == "work":
             model = advanced_model
+
         elif STATE.mode == "code":
             model = advanced_model
         elif STATE.mode == "fast":
@@ -26,7 +46,7 @@ def dynamic_model_selection(request: ModelRequest, handler) -> ModelResponse:
 
         updated_request = request.override(
             model=model,
-            system_prompt=base_prompt
+            system_prompt=secondary_prompt + base_prompt
         )
     
         return handler(updated_request)
@@ -93,6 +113,6 @@ def dynamic_model_selection(request: ModelRequest, handler) -> ModelResponse:
 
 
 
-#wrap model with: memory scope, optimization goal, allowed_tools, verbosity
+
 
 
