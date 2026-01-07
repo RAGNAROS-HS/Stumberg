@@ -22,7 +22,7 @@ vector_store = PineconeVectorStore(index=index, embedding=embeddings, namespace=
 
 @tool(response_format="content_and_artifact")
 def retrieve_context(query: str):
-    """Retrieve information to help answer a query."""
+    """Search information regarding university exams/materials"""
     retrieved_docs = vector_store.similarity_search(query, k=2)
     serialized = "\n\n".join(
         (f"Source: {doc.metadata}\nContent: {doc.page_content}")

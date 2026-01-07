@@ -1,14 +1,8 @@
-from langchain.agents import create_agent
 from langgraph.checkpoint.postgres import PostgresSaver
-from tools.weather import get_weather
-from tools.search import search
-from tools.vector_search import retrieve_context
-from middleware import dynamic_model_selection
-from schema import Context
-from models import basic_model, advanced_model
 from dotenv import load_dotenv
-from pinecone import Pinecone
 import os
+
+from graph import create_graph
 
 load_dotenv()
 os.environ["OPENAI_API_KEY"] = os.getenv("OPENAI_API_KEY", "")
@@ -19,41 +13,26 @@ os.environ["LANGCHAIN_PROJECT"] = "pr-whispered-density-79"
 PINECONE_API_KEY = os.getenv("PINECONE_API_KEY", "")
 DB_URI = os.getenv("DB_URI", "")
 
-#pinecone setup
-pc = Pinecone(api_key=PINECONE_API_KEY)
-index = pc.Index("stumberg1")
-
 def get_agent_graph(checkpointer):
-    agent = create_agent(
-        basic_model,
-        tools=[get_weather, search, retrieve_context],
-        middleware=[dynamic_model_selection],
-        checkpointer=checkpointer, 
-        context_schema=Context
-    )
-    return agent
+    return create_graph(checkpointer)
 
 if __name__ == "__main__":
-    #instead of this I can use the direct OPENAI package, need to check how that works
     with PostgresSaver.from_conn_string(DB_URI) as checkpointer:
         checkpointer.setup()  # Creates tables (run once)
         
         agent = get_agent_graph(checkpointer)
 
-        #print(agent.invoke({"messages": [{"role": "user", "content": "what is the weather in Amsterdam?"}]}))
-
         result = agent.invoke(
             {"messages": [{"role": "user", "content": "Explain machine learning in a basic manner"}]},
             config={"configurable": {"thread_id": "session_1"}}
-            #context={"user_role": "expert"}
         )
 
         def print_agent_result(result):
             """Clean agent output."""
-            final_msg = next((msg for msg in reversed(result["messages"]) if msg.type == "ai"), None)
+            # langgraph result state uses 'messages' key
+            messages = result.get("messages", [])
+            final_msg = next((msg for msg in reversed(messages) if msg.type == "ai"), None)
             print(final_msg.content if final_msg else "No AI response")
-            print(f"Persisted state history length: {len(result['messages'])}")
-
+            print(f"Persisted state history length: {len(messages)}")
 
         print_agent_result(result)
-

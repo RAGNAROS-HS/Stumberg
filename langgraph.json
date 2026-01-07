@@ -1,0 +1,15 @@
+{
+    "dependencies": [
+        "."
+    ],
+    "graphs": {
+        "agent": "./graph.py:graph"
+    },
+    "server": {
+        "allowed_origins": [
+            "https://smith.langchain.com"
+        ],
+        "cors": true
+    },
+    "env": ".env"
+}
