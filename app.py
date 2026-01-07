@@ -3,7 +3,7 @@ import uuid
 from langgraph.checkpoint.postgres import PostgresSaver
 from main import get_agent_graph, DB_URI
 from langchain_core.messages import HumanMessage, AIMessage
-from state import STATE
+
 import psycopg
 
 USER_AVATAR = "👤"
@@ -127,28 +127,28 @@ try:
             with c1:
                 if st.button("Work", key="opt1", use_container_width=True):
                     st.session_state.choice = "work"
-                    STATE.mode = "work"
+
                     st.rerun()
             
             c2 = st.container()
             with c2:
                 if st.button("Personal", key="opt2", use_container_width=True):
                     st.session_state.choice = "personal"
-                    STATE.mode = "personal"
+
                     st.rerun()
             
             c3 = st.container()
             with c3:
                 if st.button("Code", key="opt3", use_container_width=True):
                     st.session_state.choice = "code"
-                    STATE.mode = "code"
+
                     st.rerun()
             
             c4 = st.container()
             with c4:
                 if st.button("Fast", key="opt4", use_container_width=True):
                     st.session_state.choice = "fast"
-                    STATE.mode = "fast"
+
                     st.rerun()  
         
         else:
@@ -186,7 +186,8 @@ try:
                     message_placeholder.markdown("Thinking...")
                     
                     try:
-                        result = agent.invoke({"messages": [user_message]}, config=config)
+                        mode_ = st.session_state.choice if st.session_state.choice else "fast"
+                        result = agent.invoke({"messages": [user_message], "mode": mode_}, config=config)
                         final_msg = next((msg for msg in reversed(result["messages"]) if msg.type == "ai"), None)
                         
                         if final_msg:
