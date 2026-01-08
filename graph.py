@@ -5,7 +5,7 @@ from langchain_core.messages import SystemMessage
 from langgraph.graph import StateGraph, START, END
 from langgraph.prebuilt import ToolNode, tools_condition
 
-from models import basic_model, advanced_model
+from models import fast_model, research_model, coding_model, main_model
 from tools.weather import get_weather
 from tools.search import search
 from tools.vector_search import retrieve_context
@@ -16,8 +16,10 @@ tools = [get_weather, search, retrieve_context]
 tool_node = ToolNode(tools)
 
 # Bind tools to models
-basic_model_with_tools = basic_model.bind_tools(tools)
-advanced_model_with_tools = advanced_model.bind_tools(tools)
+fast_model_with_tools = fast_model.bind_tools(tools)
+research_model_with_tools = research_model.bind_tools(tools)
+coding_model_with_tools = coding_model.bind_tools(tools)
+main_model_with_tools = main_model.bind_tools(tools)
 
 def get_system_prompt(mode: str) -> str:
     base_prompt = (
@@ -50,21 +52,38 @@ def get_system_prompt(mode: str) -> str:
         )
         return secondary_prompt + base_prompt
     
-    elif mode == "work" or mode == "code":
-        # Work and Code share advanced model, no specific secondary prompt in original code 
-        # other than "advanced_model" usage.
-        # Original code didn't add prompt for 'work'/'code' other than base?
-        # Checking original middleware: 
-        # elif STATE.mode == "work": model = advanced_model
-        # elif STATE.mode == "code": model = advanced_model
-        # So it seems they just use base prompt + advanced model.
-        # But wait, logic for 'code' with 'human_message' fallback had a huge prompt.
-        # The explicit "mode" check (lines 38-44 in original) didn't add text.
-        # We will stick to base prompt for now to match behavior.
-        return base_prompt
+    elif mode == "work":
+        return secondary_prompt + base_prompt
+
+    elif mode == "code":
+        secondary_prompt = (
+            " You act as a coding assistant"
+            "Your goal is to create, modify, debug, optimize or otherwise improve code"
+            " You do so by deeply thinking about potential solutions and then implementing them"
+            " You do not add unnecessary comments or code, you modify the code to be as simple as possible"
+            " Readability and simplicity are the target, do not add any unnessesary complexity"
+            " Output the code fully and within the chat, do not skip any parts of the code even if you did not change them"
+            " do not make any assumptions yourself, do not work outside of the scope given by the user"
+            " you are NOT meant to be creative, rather your purpose is to do exactly what the user asks you to"
+            " Take the user's input and envision it in code this should be done directly unless there is a critical design choice to be made"
+            " In which case you should not take it yourself, ask the user what they wish and provide a range of options"
+            " Do not provide any intro, just output the code followed up with a brief explanation"
+            " The offered solutions should always be thoroughly searched, particularly checking forums like stackoverflow or documentation"
+            " and other sources for the latest information.\n"
+            " Always prioritize reliability, and simplicity these are paramount for the user."
+            " If the user gives strong constraints treat them as hard constraints and do not violate them."
+        )
+        return secondary_prompt + base_prompt
         
     elif mode == "fast":
-        return base_prompt
+        secondary_prompt = (
+            " You act as ultra fast information retrieval assistant."
+            "Your goal is to provide succinct, precise responses "
+            "packed purely with the basic information necessary/asked"
+            " You highlight the main points of the information and do not elaborate on it unless implied in the prompt"
+            " Keep your word count low and do not write any unnessesary text or intro, do not ask follow up questions"
+        )
+        return secondary_prompt + base_prompt
     
     return base_prompt
 
@@ -79,11 +98,14 @@ def model_node(state: AgentState):
     # However, since 'messages' is a list that grows, we might want to just 
     # invoke the model with SystemMessage + messages.
     
-    if mode in ["work", "code"]:
-        model = advanced_model_with_tools
-    else:
-        # "personal" and "fast" use basic
-        model = basic_model_with_tools
+    if mode == "code":
+        model = coding_model_with_tools
+    elif mode == "personal":
+        model = research_model_with_tools
+    elif mode == "work":
+        model = main_model_with_tools
+    elif mode == "fast":
+        model = fast_model_with_tools
         
     response = model.invoke([SystemMessage(content=system_prompt_content)] + list(messages))
     
