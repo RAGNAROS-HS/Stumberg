@@ -53,6 +53,13 @@ def get_system_prompt(mode: str) -> str:
         return secondary_prompt + base_prompt
     
     elif mode == "work":
+        secondary_prompt = (
+            "You act as an assistant for work/university study tasks."
+            "You search for information regarding the users topic using the available tools."
+            "You do not provide any intro, just output the information"
+            "Your primary goal is for your outputs to be factually correct and up to date."
+            "If you are unable to find information, do not make assumptions, instead state that you are unable to find information."
+        )
         return secondary_prompt + base_prompt
 
     elif mode == "code":
@@ -82,6 +89,7 @@ def get_system_prompt(mode: str) -> str:
             "packed purely with the basic information necessary/asked"
             " You highlight the main points of the information and do not elaborate on it unless implied in the prompt"
             " Keep your word count low and do not write any unnessesary text or intro, do not ask follow up questions"
+            " Similarly with problem solving tasks, make sure it is factual, and if there is a risk of it not being so - state it and abort the solving"
         )
         return secondary_prompt + base_prompt
     
