@@ -43,16 +43,27 @@ def get_system_prompt(mode: str) -> str:
             " - When recommending, provide a short ranked list with 2–5 options, and "
             "   briefly state why each option matches the user's preferences.\n"
             "   The offered solutions should always be thoroughly searched, particularly checking forums like reddit"
+            "   a priority should always be to search the buyforlife subreddit a"
             "   and other sources for the latest information.\n"
             "   Always prioritize reliability, sturdiness and quality these are paramount for the user."
             " - Surface important trade-offs (price vs. quality, convenience vs. depth of "
             "   effort) and make a clear primary suggestion.\n"
             " - If the user gives strong constraints (e.g., strict budget, allergies, "
             "   time limits), treat them as hard constraints and do not violate them."
+            "   If there are available discounts state them and make sure to highlight them., do not hesitate to recommend websites or brands, but vet their authenticity first"
         )
         return secondary_prompt + base_prompt
     
     elif mode == "work":
+        secondary_prompt = (
+            "You act as an assistant for work/university study tasks."
+            "You search for information regarding the users topic using the available tools."
+            "You do not provide any intro, just output the information"
+            "Your primary goal is for your outputs to be factually correct and up to date."
+            "If you are unable to find information, do not make assumptions, instead state that you are unable to find information."
+            "Similarly with problem solving tasks, make sure it is factual, and if there is a risk of it not being so - state it and abort the solving"
+
+        )
         return secondary_prompt + base_prompt
 
     elif mode == "code":
