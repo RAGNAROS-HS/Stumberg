@@ -27,3 +27,14 @@ look into redis
 
 #potential personal deployment
 - look into railway free tier
+
+
+#need to check search tool limits, it might be giving too much context
+
+fix buyforlife search tool, need to look into devvit and overall reddit api access.
+
+rethink vector store usage
+
+look into how to combine recommender AI into the main agent
+
+look a bit deeper into langsmith studio, seems pretty interesting but setup is a bit different

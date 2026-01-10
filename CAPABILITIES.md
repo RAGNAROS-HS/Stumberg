@@ -12,7 +12,7 @@
 
 ## Tools
 - **Weather**: Fetches current weather using Open-Meteo API (`tools/weather.py`).
-- **Search**: Basic placeholder for information retrieval (`tools/search.py`).
+- **Search**: Advanced information retrieval using `LinkupClient` with specialized tools for general, Reddit, and Subreddit searches (`tools/search.py`).
 
 ## Middleware
 Located in `middleware/`:
