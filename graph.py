@@ -7,12 +7,12 @@ from langgraph.prebuilt import ToolNode, tools_condition
 
 from models import fast_model, research_model, coding_model, main_model
 from tools.weather import get_weather
-from tools.search import search
+from tools.search import general_search, reddit_search, subreddit_search, buyforlife_search
 from tools.vector_search import retrieve_context
 from schema import AgentState
 
 # Define tools
-tools = [get_weather, search, retrieve_context]
+tools = [get_weather, general_search, reddit_search, subreddit_search, buyforlife_search, retrieve_context]
 tool_node = ToolNode(tools)
 
 # Bind tools to models
@@ -112,7 +112,8 @@ def model_node(state: AgentState):
     if mode == "code":
         model = coding_model_with_tools
     elif mode == "personal":
-        model = research_model_with_tools
+        #model = research_model_with_tools
+        model = main_model_with_tools
     elif mode == "work":
         model = main_model_with_tools
     elif mode == "fast":
