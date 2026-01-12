@@ -25,3 +25,9 @@
 ## Infrastructure & Engineering
 - [ ] **Deployment**: Research Railway free tier for personal deployment.
 - [x] **Observability**: Investigate LangSmith Studio for better debugging and tracing.
+
+
+
+
+fix logos and ui bugs (different button sizes upon startup)
+refresh database, delete everything so far

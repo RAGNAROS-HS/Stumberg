@@ -13,12 +13,12 @@ fast_model = ChatOpenAI(
 )
 
 
-research_model = ChatOpenAI(
-    model="o4-mini-deep-research",
-    temperature=0.1,
-    max_tokens=1000,
-    timeout=60
-)
+# research_model = ChatOpenAI(
+#     model="o4-mini-deep-research",
+#     temperature=0.1,
+#     max_tokens=1000,
+#     timeout=60
+# )
 
 
 coding_model = ChatOpenAI(
