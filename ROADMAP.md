@@ -7,7 +7,8 @@
 - [ ] **Vector Store Strategy**: Rethink and optimize current vector store usage.
 
 ## Tools & Capabilities
-- [ ] **Summary Tool**: Develop a general summarization tool.
+- [ ] **Summary subagent**: Develop a general summarization tool.
+- [ ] **Judge subagent**: Develop a judge tool which will either allow or disallow agent output based on user preferences.
 - [ ] **Exam Prep Tool**: Create a tool that asks questions to test knowledge.
 - [ ] **Concept Explanation Tool**: Build a tool for pedagogical concept explanations.
 - [ ] **Recommendation Tool**: Implement a separate algorithm for analyzing user preferences and suggesting content (movies, products, etc.).
@@ -21,13 +22,15 @@
 - [ ] **Planning Tool**: Create a "Planning" capability for pre-code preparation.
 - [x] **Coding Tool/Mode**: Research and design a dedicated coding mode or tool.
 - [ ] **Project Context**: Implement "Folders" or "Projects" concept to maintain persistent context.
+- [ ] **fix logos and ui bugs**:  (different button sizes upon startup).
 
 ## Infrastructure & Engineering
 - [ ] **Deployment**: Research Railway free tier for personal deployment.
 - [x] **Observability**: Investigate LangSmith Studio for better debugging and tracing.
+- [x] **refresh database**: delete everything so far
+- [] **Check prompt injection risk**: in the delegation to subagents there is the risk of prompt injection, handle this correctly
 
 
-
-
-fix logos and ui bugs (different button sizes upon startup)
-refresh database, delete everything so far
+- [] **User sentiment analysis**: take search tool output and analyze it for sentiment: 
+dataset: https://huggingface.co/datasets/GerindT/mini_amazon_sentimental
+- [] **Playwright implementation**:create vector store from buyitforlife and add on-demand playwright scraping tool
