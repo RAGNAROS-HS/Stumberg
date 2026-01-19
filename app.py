@@ -27,7 +27,7 @@ def get_available_threads():
     try:
         with psycopg.connect(DB_URI) as conn:
             with conn.cursor() as cur:
-                cur.execute("SELECT DISTINCT thread_id FROM checkpoints")
+                cur.execute("SELECT thread_id FROM checkpoints GROUP BY thread_id ORDER BY MAX(checkpoint_id) DESC")
                 return [row[0] for row in cur.fetchall()]
     except Exception:
         # this will run if tables don't exist
@@ -111,14 +111,14 @@ try:
         if st.session_state.choice is None:
             st.markdown("""
             <style>
-            div[data-testid="stVerticalBlock"] div[data-testid="stButton"] > button {
+            section[data-testid="stMain"] div[data-testid="stVerticalBlock"] div[data-testid="stButton"] > button {
                 height: 15vh;
                 width: 100%;
                 font-size: 1.5rem;
                 margin-bottom: 10px;
             }
             </style>
-            """, unsafe_allow_html=True)
+                        """, unsafe_allow_html=True)
             
             # Welcome Screen Options
             st.subheader("Choose your mode")
