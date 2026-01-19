@@ -1,10 +1,9 @@
 from typing import Literal
-
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain_core.messages import SystemMessage
 from langgraph.graph import StateGraph, START, END
 from langgraph.prebuilt import ToolNode, tools_condition
-
+import os
 from models import fast_model, coding_model, main_model
 from tools.weather import get_weather
 from tools.vector_search import retrieve_context
@@ -25,7 +24,7 @@ main_model_with_tools = main_model.bind_tools(tools)
 
 
 
-def model_node(state: AgentState):
+def model_node(state: AgentState, config):
     mode = state.get("mode", "fast")
     messages = state["messages"]
     
@@ -40,6 +39,31 @@ def model_node(state: AgentState):
         model = main_model_with_tools
     elif mode == "fast":
         model = fast_model_with_tools
+
+    # Inject File Context
+
+    configurable = config.get("configurable", {})
+    thread_id = configurable.get("thread_id")
+    
+    if thread_id:
+        thread_dir = os.path.join("conversation_data", thread_id)
+        if os.path.exists(thread_dir):
+            file_context = "\n\n### ATTACHED CONTEXT FILES ###\n"
+            found_files = False
+            for filename in os.listdir(thread_dir):
+                file_path = os.path.join(thread_dir, filename)
+                if os.path.isfile(file_path):
+                    try:
+                        with open(file_path, "r", encoding="utf-8") as f:
+                            content = f.read()
+                            file_context += f"\n--- FILE: {filename} ---\n{content}\n"
+                            found_files = True
+                    except Exception as e:
+                        file_context += f"\n--- FILE: {filename} (Error reading: {e}) ---\n"
+            
+            if found_files:
+                file_context += "\n### END OF CONTEXT FILES ###\n"
+                system_prompt_content += file_context
         
     response = model.invoke([SystemMessage(content=system_prompt_content)] + list(messages))
     

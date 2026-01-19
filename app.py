@@ -119,6 +119,42 @@ try:
                 st.rerun()
 
             st.markdown("---")
+
+            
+            # File Uploader
+            uploaded_files = st.file_uploader(
+                "Attach text files for context", 
+                type=["txt", "md", "py", "json"], 
+                accept_multiple_files=True,
+                key=f"uploader_{st.session_state.thread_id}" # Unique key per thread to reset on switch
+            )
+            
+            if uploaded_files:
+                import os
+                
+                # Create directory for thread
+                thread_dir = os.path.join("conversation_data", st.session_state.thread_id)
+                os.makedirs(thread_dir, exist_ok=True)
+                
+                for uploaded_file in uploaded_files:
+                    file_path = os.path.join(thread_dir, uploaded_file.name)
+                    with open(file_path, "wb") as f:
+                        f.write(uploaded_file.getbuffer())
+                    st.toast(f"Saved {uploaded_file.name}", icon="💾")
+            
+            # Show existing files
+            import os
+            thread_dir = os.path.join("conversation_data", st.session_state.thread_id)
+            if os.path.exists(thread_dir):
+                files = os.listdir(thread_dir)
+                if files:
+                    st.caption("Attached files:")
+                    for file in files:
+                        st.markdown(f"- 📄 {file}")
+                else:
+                    st.caption("No files attached.")
+
+            st.markdown("---")
             st.markdown("### Recent conversations")
 
             # Thread Selection - Scrollable List
