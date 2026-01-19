@@ -1,4 +1,5 @@
 import streamlit as st
+import base64
 import uuid
 from langgraph.checkpoint.postgres import PostgresSaver
 from main import get_agent_graph, DB_URI
@@ -7,7 +8,7 @@ from langchain_core.messages import HumanMessage, AIMessage
 import psycopg
 
 USER_AVATAR = "👤"
-BOT_AVATAR = "🤖"
+BOT_AVATAR = "misc/stumlogo.png"
 
 st.set_page_config(page_title="Stumberg Agent", page_icon="misc/stumlogo.png")
 
@@ -19,6 +20,39 @@ st.markdown("""
     }
 </style>
 """, unsafe_allow_html=True)
+
+def get_base64_image(image_path):
+    with open(image_path, "rb") as img_file:
+        return base64.b64encode(img_file.read()).decode()
+
+def add_logo():
+    st.markdown(
+        """
+        <style>
+            .fixed-logo {
+                position: fixed;
+                bottom: 20px;
+                right: 20px;
+                width: 100px;
+                z-index: 9999;
+                pointer-events: none;
+                opacity: 0.8;
+            }
+        </style>
+        """,
+        unsafe_allow_html=True
+    )
+    
+    logo_path = "misc/stumlogoLookingLeft.png"
+    try:
+        st.markdown(
+            f'<img src="data:image/png;base64,{get_base64_image(logo_path)}" class="fixed-logo">',
+            unsafe_allow_html=True
+        )
+    except FileNotFoundError:
+        pass
+
+add_logo()
 
 st.title("Stumberg Agent")
 
