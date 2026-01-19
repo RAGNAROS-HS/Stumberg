@@ -133,7 +133,7 @@ try:
                 import os
                 
                 # Create directory for thread
-                thread_dir = os.path.join("conversation_data", st.session_state.thread_id)
+                thread_dir = os.path.join(r"E:\conversation_data", st.session_state.thread_id)
                 os.makedirs(thread_dir, exist_ok=True)
                 
                 for uploaded_file in uploaded_files:
@@ -144,7 +144,7 @@ try:
             
             # Show existing files
             import os
-            thread_dir = os.path.join("conversation_data", st.session_state.thread_id)
+            thread_dir = os.path.join(r"E:\conversation_data", st.session_state.thread_id)
             if os.path.exists(thread_dir):
                 files = os.listdir(thread_dir)
                 if files:

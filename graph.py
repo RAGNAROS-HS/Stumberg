@@ -46,7 +46,7 @@ def model_node(state: AgentState, config):
     thread_id = configurable.get("thread_id")
     
     if thread_id:
-        thread_dir = os.path.join("conversation_data", thread_id)
+        thread_dir = os.path.join(r"E:\conversation_data", thread_id)
         if os.path.exists(thread_dir):
             file_context = "\n\n### ATTACHED CONTEXT FILES ###\n"
             found_files = False
