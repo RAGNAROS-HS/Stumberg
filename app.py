@@ -1,4 +1,5 @@
 import streamlit as st
+import base64
 import uuid
 from langgraph.checkpoint.postgres import PostgresSaver
 from main import get_agent_graph, DB_URI
@@ -7,7 +8,7 @@ from langchain_core.messages import HumanMessage, AIMessage
 import psycopg
 
 USER_AVATAR = "👤"
-BOT_AVATAR = "🤖"
+BOT_AVATAR = "misc/stumlogo.png"
 
 st.set_page_config(page_title="Stumberg Agent", page_icon="misc/stumlogo.png")
 
@@ -20,6 +21,39 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
+def get_base64_image(image_path):
+    with open(image_path, "rb") as img_file:
+        return base64.b64encode(img_file.read()).decode()
+
+def add_logo():
+    st.markdown(
+        """
+        <style>
+            .fixed-logo {
+                position: fixed;
+                bottom: 20px;
+                right: 20px;
+                width: 100px;
+                z-index: 9999;
+                pointer-events: none;
+                opacity: 0.8;
+            }
+        </style>
+        """,
+        unsafe_allow_html=True
+    )
+    
+    logo_path = "misc/stumlogoLookingLeft.png"
+    try:
+        st.markdown(
+            f'<img src="data:image/png;base64,{get_base64_image(logo_path)}" class="fixed-logo">',
+            unsafe_allow_html=True
+        )
+    except FileNotFoundError:
+        pass
+
+add_logo()
+
 st.title("Stumberg Agent")
 
 def get_available_threads():
@@ -27,7 +61,7 @@ def get_available_threads():
     try:
         with psycopg.connect(DB_URI) as conn:
             with conn.cursor() as cur:
-                cur.execute("SELECT DISTINCT thread_id FROM checkpoints")
+                cur.execute("SELECT thread_id FROM checkpoints GROUP BY thread_id ORDER BY MAX(checkpoint_id) DESC")
                 return [row[0] for row in cur.fetchall()]
     except Exception:
         # this will run if tables don't exist
@@ -85,6 +119,42 @@ try:
                 st.rerun()
 
             st.markdown("---")
+
+            
+            # File Uploader
+            uploaded_files = st.file_uploader(
+                "Attach text files for context", 
+                type=["txt", "md", "py", "json"], 
+                accept_multiple_files=True,
+                key=f"uploader_{st.session_state.thread_id}" # Unique key per thread to reset on switch
+            )
+            
+            if uploaded_files:
+                import os
+                
+                # Create directory for thread
+                thread_dir = os.path.join(r"E:\conversation_data", st.session_state.thread_id)
+                os.makedirs(thread_dir, exist_ok=True)
+                
+                for uploaded_file in uploaded_files:
+                    file_path = os.path.join(thread_dir, uploaded_file.name)
+                    with open(file_path, "wb") as f:
+                        f.write(uploaded_file.getbuffer())
+                    st.toast(f"Saved {uploaded_file.name}", icon="💾")
+            
+            # Show existing files
+            import os
+            thread_dir = os.path.join(r"E:\conversation_data", st.session_state.thread_id)
+            if os.path.exists(thread_dir):
+                files = os.listdir(thread_dir)
+                if files:
+                    st.caption("Attached files:")
+                    for file in files:
+                        st.markdown(f"- 📄 {file}")
+                else:
+                    st.caption("No files attached.")
+
+            st.markdown("---")
             st.markdown("### Recent conversations")
 
             # Thread Selection - Scrollable List
@@ -111,14 +181,14 @@ try:
         if st.session_state.choice is None:
             st.markdown("""
             <style>
-            div[data-testid="stVerticalBlock"] div[data-testid="stButton"] > button {
+            section[data-testid="stMain"] div[data-testid="stVerticalBlock"] div[data-testid="stButton"] > button {
                 height: 15vh;
                 width: 100%;
                 font-size: 1.5rem;
                 margin-bottom: 10px;
             }
             </style>
-            """, unsafe_allow_html=True)
+                        """, unsafe_allow_html=True)
             
             # Welcome Screen Options
             st.subheader("Choose your mode")

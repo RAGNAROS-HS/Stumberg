@@ -8,7 +8,7 @@
 
 ## Tools & Capabilities
 - [ ] **Summary subagent**: Develop a general summarization tool.
-- [ ] **Judge subagent**: Develop a judge tool which will either allow or disallow agent output based on user preferences.
+- [ ] **Judge subagent**: Develop a judge tool which will either allow or disallow agent output based on user preferences, this could either be in the search subagent loop. Or we split the search, make the main agent make its output, the subagent make its own too
 - [ ] **Exam Prep Tool**: Create a tool that asks questions to test knowledge.
 - [ ] **Concept Explanation Tool**: Build a tool for pedagogical concept explanations.
 - [ ] **Recommendation Tool**: Implement a separate algorithm for analyzing user preferences and suggesting content (movies, products, etc.).
@@ -19,10 +19,9 @@
 ## User Experience & Modes
 - [x] **Mode Selection**: Implement a startup prompt for mode selection (Uni/Work, Personal, General).
 - [ ] **File Upload**: Add capability for users to upload files.
-- [ ] **Planning Tool**: Create a "Planning" capability for pre-code preparation.
 - [x] **Coding Tool/Mode**: Research and design a dedicated coding mode or tool.
-- [ ] **Project Context**: Implement "Folders" or "Projects" concept to maintain persistent context.
-- [ ] **fix logos and ui bugs**:  (different button sizes upon startup).
+- [ ] **Project Context**: Implement "Folders" or "Projects" concept to maintain persistent context. Core memories? Forcefully input cross coversation context
+- [x] **fix logos and ui bugs**:  (different button sizes upon startup).
 
 ## Infrastructure & Engineering
 - [ ] **Deployment**: Research Railway free tier for personal deployment.
@@ -34,3 +33,4 @@
 - [] **User sentiment analysis**: take search tool output and analyze it for sentiment: 
 dataset: https://huggingface.co/datasets/GerindT/mini_amazon_sentimental
 - [] **Playwright implementation**:create vector store from buyitforlife and add on-demand playwright scraping tool
+
