@@ -6,6 +6,22 @@ from main import get_agent_graph, DB_URI
 from langchain_core.messages import HumanMessage, AIMessage
 
 import psycopg
+import os
+
+# Configuration
+CONVERSATION_DATA_PATH = os.getenv("CONVERSATION_DATA_PATH", "/host_e/conversation_data")
+
+# Verify connection to external drive
+if not os.path.exists(CONVERSATION_DATA_PATH):
+    # Try to create it if it doesn't exist (might succeed if it's just a local path issue, but warns if mount is missing)
+    try:
+        os.makedirs(CONVERSATION_DATA_PATH, exist_ok=True)
+    except OSError:
+        pass
+        
+    if not os.path.exists(CONVERSATION_DATA_PATH):
+        st.warning(f"⚠️ External data path not found: `{CONVERSATION_DATA_PATH}`. Data will not strongly persist.")
+
 
 USER_AVATAR = "👤"
 BOT_AVATAR = "misc/stumlogo.png"
@@ -130,10 +146,8 @@ try:
             )
             
             if uploaded_files:
-                import os
-                
                 # Create directory for thread
-                thread_dir = os.path.join(r"E:\conversation_data", st.session_state.thread_id)
+                thread_dir = os.path.join(CONVERSATION_DATA_PATH, st.session_state.thread_id)
                 os.makedirs(thread_dir, exist_ok=True)
                 
                 for uploaded_file in uploaded_files:
@@ -143,8 +157,9 @@ try:
                     st.toast(f"Saved {uploaded_file.name}", icon="💾")
             
             # Show existing files
-            import os
-            thread_dir = os.path.join(r"E:\conversation_data", st.session_state.thread_id)
+            # Show existing files
+            thread_dir = os.path.join(CONVERSATION_DATA_PATH, st.session_state.thread_id)
+
             if os.path.exists(thread_dir):
                 files = os.listdir(thread_dir)
                 if files:
