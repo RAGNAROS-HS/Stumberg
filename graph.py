@@ -22,7 +22,7 @@ fast_model_with_tools = fast_model.bind_tools(tools)
 coding_model_with_tools = coding_model.bind_tools(tools)
 main_model_with_tools = main_model.bind_tools(tools)
 
-
+#test comment
 
 def model_node(state: AgentState, config):
     mode = state.get("mode", "fast")
