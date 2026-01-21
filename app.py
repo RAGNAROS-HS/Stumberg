@@ -137,16 +137,12 @@ try:
             st.markdown("---")
 
             
-            # Initialize uploader key if needed
-            if "uploader_key" not in st.session_state:
-                st.session_state.uploader_key = 0
-
-            # File Uploader (Auto-clears after upload)
+            # File Uploader
             uploaded_files = st.file_uploader(
                 "Attach text files", 
                 type=["txt", "md", "py", "json", "pdf"], 
                 accept_multiple_files=True,
-                key=f"uploader_{st.session_state.thread_id}_{st.session_state.uploader_key}"
+                key=f"uploader_{st.session_state.thread_id}"
             )
             
             thread_dir = os.path.join(CONVERSATION_DATA_PATH, st.session_state.thread_id)
@@ -158,10 +154,6 @@ try:
                     with open(file_path, "wb") as f:
                         f.write(uploaded_file.getbuffer())
                     st.toast(f"Saved {uploaded_file.name}", icon="💾")
-                
-                # Increment key to reset uploader UI
-                st.session_state.uploader_key += 1
-                st.rerun()
             
             # Saved Files List
             if os.path.exists(thread_dir):

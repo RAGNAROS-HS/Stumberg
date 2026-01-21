@@ -22,8 +22,7 @@ fast_model_with_tools = fast_model.bind_tools(tools)
 coding_model_with_tools = coding_model.bind_tools(tools)
 main_model_with_tools = main_model.bind_tools(tools)
 
-#test comment
-
+ 
 def model_node(state: AgentState, config):
     mode = state.get("mode", "fast")
     messages = state["messages"]
@@ -46,7 +45,7 @@ def model_node(state: AgentState, config):
     thread_id = configurable.get("thread_id")
     
     if thread_id:
-        thread_dir = os.path.join(r"E:\conversation_data", thread_id)
+        thread_dir = os.path.join(os.getenv("CONVERSATION_DATA_PATH", "/host_e/conversation_data"), thread_id)
         if os.path.exists(thread_dir):
             file_context = "\n\n### ATTACHED CONTEXT FILES ###\n"
             found_files = False
