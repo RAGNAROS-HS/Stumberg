@@ -137,38 +137,47 @@ try:
             st.markdown("---")
 
             
-            # File Uploader
+            # Initialize uploader key if needed
+            if "uploader_key" not in st.session_state:
+                st.session_state.uploader_key = 0
+
+            # File Uploader (Auto-clears after upload)
             uploaded_files = st.file_uploader(
-                "Attach text files for context", 
-                type=["txt", "md", "py", "json"], 
+                "Attach text files", 
+                type=["txt", "md", "py", "json", "pdf"], 
                 accept_multiple_files=True,
-                key=f"uploader_{st.session_state.thread_id}" # Unique key per thread to reset on switch
+                key=f"uploader_{st.session_state.thread_id}_{st.session_state.uploader_key}"
             )
             
+            thread_dir = os.path.join(CONVERSATION_DATA_PATH, st.session_state.thread_id)
+            os.makedirs(thread_dir, exist_ok=True)
+
             if uploaded_files:
-                # Create directory for thread
-                thread_dir = os.path.join(CONVERSATION_DATA_PATH, st.session_state.thread_id)
-                os.makedirs(thread_dir, exist_ok=True)
-                
                 for uploaded_file in uploaded_files:
                     file_path = os.path.join(thread_dir, uploaded_file.name)
                     with open(file_path, "wb") as f:
                         f.write(uploaded_file.getbuffer())
                     st.toast(f"Saved {uploaded_file.name}", icon="💾")
+                
+                # Increment key to reset uploader UI
+                st.session_state.uploader_key += 1
+                st.rerun()
             
-            # Show existing files
-            # Show existing files
-            thread_dir = os.path.join(CONVERSATION_DATA_PATH, st.session_state.thread_id)
-
+            # Saved Files List
             if os.path.exists(thread_dir):
                 files = os.listdir(thread_dir)
                 if files:
-                    st.caption("Attached files:")
+                    st.markdown("#### Saved Files")
                     for file in files:
-                        st.markdown(f"- 📄 {file}")
+                        c1, c2 = st.columns([0.8, 0.2])
+                        with c1:
+                            st.markdown(f"📄 {file}")
+                        with c2:
+                            if st.button("🗑️", key=f"del_{file}"):
+                                os.remove(os.path.join(thread_dir, file))
+                                st.rerun()
                 else:
-                    st.caption("No files attached.")
-
+                    st.caption("No files saved.")
             st.markdown("---")
             st.markdown("### Recent conversations")
 
