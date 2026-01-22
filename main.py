@@ -1,7 +1,6 @@
 from langgraph.checkpoint.postgres import PostgresSaver
 from dotenv import load_dotenv
 import os
-
 from graph import create_graph
 
 load_dotenv()

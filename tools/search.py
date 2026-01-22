@@ -44,7 +44,7 @@ def subreddit_search(question: str, subreddit: str) -> str:
 
 
 @tool
-def buyforlife_search(question: str, limit: int = 50, sort: str = "relevance") -> str:
+def buyforlife_search(question: str, limit: int = 50, sort: str = "top") -> str:
     """
     Search r/BuyItForLife for product recommendations and reviews using official Reddit API.
     Args:
