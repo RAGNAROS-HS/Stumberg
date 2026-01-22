@@ -4,7 +4,7 @@ A modular, multi-mode AI assistant built with LangGraph and LangChain. Provides 
 
 ## Overview
 
-Stumberg is a conversational AI agent that combines state-of-the-art language models with specialized tools and persistent memory. The system uses a graph-based architecture to route queries to appropriate models and tools based on user-selected modes.
+Stumberg is a conversational AI agent that combines large language models with specialized tools and persistent memory. The system uses a graph-based architecture to route queries to appropriate models and tools based on user-selected modes.
 
 ## Technology Stack
 
