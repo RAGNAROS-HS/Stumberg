@@ -18,7 +18,7 @@
 
 ## User Experience & Modes
 - [x] **Mode Selection**: Implement a startup prompt for mode selection (Uni/Work, Personal, General).
-- [ ] **File Upload**: Add capability for users to upload files.
+- [x] **File Upload**: Add capability for users to upload files.
 - [x] **Coding Tool/Mode**: Research and design a dedicated coding mode or tool.
 - [ ] **Project Context**: Implement "Folders" or "Projects" concept to maintain persistent context. Core memories? Forcefully input cross coversation context
 - [x] **fix logos and ui bugs**:  (different button sizes upon startup).
@@ -34,3 +34,7 @@
 dataset: https://huggingface.co/datasets/GerindT/mini_amazon_sentimental
 - [] **Playwright implementation**:create vector store from buyitforlife and add on-demand playwright scraping tool
 
+Fixes:
+
+uploaded files appear twice in UI
+uploaded files dont seem to reach the context
