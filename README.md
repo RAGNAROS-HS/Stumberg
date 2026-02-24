@@ -1,20 +1,100 @@
 # Stumberg Agent
 
-A modular, multi-mode AI assistant built with **LangGraph** and **LangChain**. Provides context-aware responses through a Streamlit web interface with specialized modes for shopping, research, coding, and fast information retrieval.
+A modular, multi-mode AI assistant built with LangGraph and LangChain. Provides intelligent, context-aware responses through a Streamlit web interface with specialized modes for personal shopping, work/study research, coding assistance, and fast information retrieval.
 
-## Tech Stack
+## Overview
 
-| Layer         | Technology                              |
-| ------------- | --------------------------------------- |
-| Orchestration | LangGraph + LangChain                   |
-| UI            | Streamlit                               |
-| Models        | GPT-4o (main/code), GPT-4.1-nano (fast) |
-| Persistence   | PostgreSQL (conversation checkpoints)   |
-| Vector Search | Pinecone                                |
-| Web Search    | LinkupClient                            |
-| Reddit        | PRAW                                    |
-| Weather       | Open-Meteo API                          |
-| Tracing       | LangSmith (optional)                    |
+Stumberg is a conversational AI agent that combines large language models with specialized tools and persistent memory. The system uses a graph-based architecture to route queries to appropriate models and tools based on user-selected modes.
+
+## Technology Stack
+
+### Core Frameworks
+- **LangGraph**: Agent orchestration and state machine management
+- **LangChain**: LLM framework and tool integration
+- **Streamlit**: Web-based user interface
+- **PostgreSQL**: Conversation state persistence via `langgraph.checkpoint.postgres.PostgresSaver`
+
+### Language Models
+- **GPT-4o**: Primary model for Work, Personal, and Code modes
+- **GPT-4.1-nano**: Fast model for quick information retrieval
+
+### External Services
+- **OpenAI API**: Language model access
+- **Pinecone**: Vector database for semantic search
+- **LinkupClient**: Web search API
+- **PRAW**: Reddit API wrapper for r/BuyItForLife scraping
+- **Open-Meteo API**: Weather data retrieval
+- **LangSmith**: Agent tracing and debugging (optional)
+
+## Features
+
+### Core Capabilities
+
+**Persistent Conversations**
+- PostgreSQL-backed state management
+- Thread-based conversation history
+- Automatic state checkpointing
+
+**Multi-Mode Operation**
+- Mode-specific system prompts and behavior
+- Dynamic model selection based on mode
+- Specialized tool access per mode
+
+**File Context System**
+- Per-conversation file uploads (txt, md, py, json, pdf)
+- Automatic context injection into system prompts
+- Persistent file storage in conversation-specific directories
+
+**Advanced Search Integration**
+- Dedicated search subagent with multiple search tools
+- Web search via LinkupClient
+- Reddit-specific and subreddit-targeted searches
+- r/BuyItForLife product recommendation scraping
+
+**Vector Search**
+- Pinecone vector store integration
+- Semantic context retrieval
+- Knowledge base querying
+
+**Weather Information**
+- Real-time weather data
+- Location-based queries
+
+### Interface Features
+
+- Thread-based conversation management
+- File upload and attachment system
+- Conversation sorting by recency
+- Mode selection interface
+- Configurable external storage paths
+
+## Architecture
+
+### Agent Graph Structure
+
+The system implements a LangGraph state machine with the following flow:
+
+1. **Streamlit Interface (app.py)**: User interaction layer
+2. **Main Agent Graph (graph.py)**: Central orchestration
+3. **Model Node**: Mode-based model selection and prompt generation
+4. **Tool Selection**: Conditional routing to appropriate tools
+5. **Tool Execution**: Direct tool calls or subagent delegation
+
+### Subagent System
+
+**Search Subagent**: Independent LangGraph agent handling all search operations
+- General web search
+- Reddit-wide search
+- Subreddit-specific search
+- BuyItForLife subreddit search
+
+### State Management
+
+Conversations are persisted using PostgreSQL with the following structure:
+- Thread ID-based isolation
+- Message history storage
+- Checkpoint-based state recovery
+- File associations per thread
 
 ## Modes
 
