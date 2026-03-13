@@ -1,11 +1,11 @@
-# 🤖 Stumberg Agent
+#  Stumberg Agent
 
 > A modular, multi-mode AI assistant built with **LangGraph** and **LangChain**.  
 > Intelligent, context-aware responses through a Streamlit web interface — with specialized modes for shopping, research, coding, and fast retrieval.
 
 ---
 
-## ✨ Features
+##  Features
 
 | Feature                      | Description                                                                        |
 | ---------------------------- | ---------------------------------------------------------------------------------- |
@@ -18,7 +18,7 @@
 
 ---
 
-## 🎛️ Modes
+##  Modes
 
 | Mode         | Model        | Purpose                                                         |
 | ------------ | ------------ | --------------------------------------------------------------- |
@@ -29,7 +29,7 @@
 
 ---
 
-## 🏗️ Architecture
+##  Architecture
 
 LangGraph state machine with the following flow:
 
@@ -61,7 +61,7 @@ graph LR
 
 ---
 
-## 🛠️ Tech Stack
+##  Tech Stack
 
 | Layer             | Technology                                   |
 | ----------------- | -------------------------------------------- |
@@ -78,7 +78,7 @@ graph LR
 
 ---
 
-## 📁 Project Structure
+##  Project Structure
 
 ```
 Stumberg/
@@ -105,7 +105,7 @@ Stumberg/
 
 ---
 
-## 🚀 Getting Started
+##  Getting Started
 
 ### Prerequisites
 
@@ -158,6 +158,4 @@ docker run -p 8501:8501 \
 
 ---
 
-## 📄 License
 
-Personal use and experimentation.
