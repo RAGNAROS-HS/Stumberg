@@ -1,416 +1,196 @@
-# Stumberg V2 — Product Spec
+# Stumberg V2 — Implementation Guide for Claude Code
 
-This document defines what Stumberg V2 should be, what it should do, and how it should be structured.
-It is written to be read by Claude Code at the start of a fresh implementation.
-
----
-
-## What This Project Is
-
-Stumberg is a personal AI assistant built for one person. It has two jobs:
-
-1. **Answer questions fast** — factual lookups, quick calculations, brief explanations. Minimal output, no fluff.
-2. **Give personalized recommendations** — shopping, diet, lifestyle, products. Based on what the user actually likes, not generic advice.
-
-It is not a general-purpose chatbot. It is not a coding assistant. It is not a study tool. Scope creep into those areas should be actively resisted.
-
-The defining feature beyond the two modes is **memory of user preferences**. The agent should get better at Personal recommendations the more it's used. It should know what you like without being told every time.
-
-Priorities in order:
-1. **Response quality** — recommendations are personalized and grounded in real sources, not generic
-2. **Speed** — Fast mode responses appear immediately via streaming
-3. **Memory** — preferences accumulate across conversations and visibly improve recommendations over time
-4. **Reliability** — the app starts cleanly, fails loudly on missing config, degrades gracefully on missing optional services
+This document is the authoritative guide for implementing Stumberg V2 from scratch. Read it completely before writing any code. Every section is load-bearing — do not skip the workflow rules, test criteria, or non-negotiables.
 
 ---
 
-## Modes
+## How to Use This Document
 
-There are exactly two modes. No others.
+Work through the phases in order. Each phase has a clear goal, a list of files to create or modify, acceptance criteria you must verify before closing the PR, and the exact branch name and commit type to use. Do not start a phase until all acceptance criteria for the previous phase are met.
 
-### Fast Mode
+**Each phase must be implemented inside a git worktree.** Before writing any code for a phase, use the `EnterWorktree` tool (or invoke a sub-agent with `isolation: "worktree"`) to check out an isolated copy of the repo. This keeps `main` clean, makes the diff reviewable before merging, and allows the acceptance criteria to be verified in isolation before the PR is opened.
 
-The default. A stripped-down factual assistant.
+Workflow per phase:
+1. Enter a worktree on the phase branch (e.g., `phase/1-backend-foundation`)
+2. Implement everything listed in the phase's file manifest
+3. Verify all acceptance criteria pass inside the worktree
+4. Commit with the correct conventional commit format
+5. Open the PR from the worktree branch — do not merge until criteria pass
+6. Exit the worktree; squash-merge to `main`
 
-- Answers are as short as possible — one sentence if the question allows it
-- No intro, no follow-up questions, no elaboration unless the prompt implies it
-- Uses a cheap, fast model
-- Does not search unless the question clearly requires current information (e.g., today's price, current weather)
-- Does not consult user preferences — it's a lookup tool, not a recommendation engine
-
-**When it uses tools:** Weather queries (always), factual questions about recent events or prices (model's judgement). For everything else it answers from training data.
-
-### Personal Mode
-
-A recommendation and lifestyle assistant that knows the user.
-
-- Gives ranked, opinionated recommendations — not "it depends" non-answers
-- Always searches before recommending products (prices change, new options exist)
-- Heavily weighted toward Reddit (real user opinions) and r/BuyItForLife (durability focus) for product queries
-- Surfaces the single best option clearly, with 2–3 alternatives and a brief reason for each
-- Applies known user preferences automatically — if the user dislikes synthetic fabrics, that constraint is applied without being stated
-- Flags relevant discounts or cheaper alternatives when found
-- Hard constraints from the user (budget, dietary restrictions, allergies) are never violated
-
-**When it uses tools:** Almost always for product and food queries. Weather for outdoor activity recommendations. User memory for preference retrieval.
+When in doubt about scope: stop and ask. Do not add features, speculative abstractions, or "improvements" not listed here.
 
 ---
 
-## User Memory — The Core New Feature
+## Product Context (Read Once, Then Refer Back Only As Needed)
 
-This is the most important thing V2 adds that V1 never had. The agent should **build a persistent profile of the user** across all conversations and use it automatically in Personal mode.
+Stumberg is a personal AI assistant for one user. Two jobs only:
 
-### What Gets Remembered
+1. **Fast mode** — answer questions in one sentence. No fluff. Cheap model. Minimal tools.
+2. **Personal mode** — personalized recommendations for shopping, food, lifestyle. Searches before recommending. Applies stored user preferences automatically.
 
-Three categories:
+The defining feature of V2 is **persistent user memory**: a profile that accumulates across conversations and visibly improves Personal mode recommendations over time.
 
-**Preferences** — things the user likes or dislikes, with context.
-Examples: prefers natural fabrics, dislikes overly sweet food, likes minimalist design, owns a dog, is vegetarian, has a knee injury that limits certain exercises, prefers brands that are repairable.
-
-**Constraints** — hard limits that must never be violated.
-Examples: budget ceiling for a category (under €X for headphones), dietary restrictions, allergies.
-
-**Past recommendations** — what was recommended and whether the user accepted, rejected, or expressed an opinion on it. This is the feedback signal that improves future recommendations.
-
-### How Memory Is Stored
-
-User memory lives in a dedicated `user_profile` table in PostgreSQL. It is separate from conversation history — it persists across thread deletions and is never overwritten by the checkpointer.
-
-The table structure is intentionally simple: each row is a memory item with a category (`preference`, `constraint`, `feedback`), a natural-language description, and a timestamp. No complex schema — the agent reads and writes plain text entries.
-
-### How Memory Is Used
-
-At the start of every Personal mode invocation, the agent retrieves the full user profile and prepends it to the system prompt as a dedicated section. The agent is instructed to treat this as ground truth about the user and apply it without asking the user to repeat themselves.
-
-### How Memory Is Updated
-
-There are two update paths:
-
-**Automatic extraction** — after every Personal mode conversation, a background step reviews the exchange and extracts any new preferences, constraints, or feedback signals worth storing. This runs after the response is delivered, not before (zero latency impact). The agent looks for: expressed opinions ("I hate X", "I always prefer Y"), outcomes ("I bought the one you recommended, loved it"), and corrections ("don't recommend leather, I'm vegan").
-
-**Explicit commands** — the user can say "remember that I prefer X" or "forget my preference for Y" directly in the chat. The agent handles this immediately.
-
-**Feedback buttons** — a thumbs up / thumbs down and an "I bought it" button appear under every Personal mode response. These are the strongest signal for memory improvement and feed directly into the feedback category of the user profile. This is more reliable than trying to infer sentiment from conversation text alone.
-
-**Follow-up tracking** — after recommending a product, the agent can send a follow-up message (via Telegram) days or weeks later asking whether the recommendation was acted on and how it worked out. This closes the feedback loop for purchases and gives strong long-term signal.
-
-### Budget Profiles
-
-The user has per-category budget ceilings stored in their profile, not a single global limit. Examples: "max €80 for headphones", "max €150 for shoes". These are hard constraints the agent never violates. The user sets them via explicit commands or they are inferred from reactions to price points in past conversations.
-
-### Seasonal Context
-
-Memory entries are timestamped. The agent notes the season when a preference is recorded and can surface seasonally relevant preferences. "User prefers lighter meals" tagged in summer is treated differently to the same preference expressed in winter.
-
-### Memory Transparency
-
-The user can ask "what do you know about me?" at any time and receive a readable summary of their stored profile. They can also ask to delete specific items or clear the profile entirely.
-
-Memory should never silently apply constraints in ways that seem wrong. If a stored preference conflicts with the user's current request, the agent should flag the conflict rather than silently ignore the request.
+Priorities in order: response quality → speed → memory → reliability.
 
 ---
 
-## Feature Spec
+## Git Workflow
 
-### F1 — Streaming Responses
+Follow these rules on every phase.
 
-Responses stream token by token. The user never sees a frozen UI.
+### Worktrees (required)
 
-- Tokens appear as generated
-- During tool calls, a non-blocking status message shows what is happening (e.g., "Searching Reddit...")
-- The status message is replaced by the response when streaming begins
-- Errors appear inline in the chat
-
-### F2 — Mode Switching
-
-Mode is a toggle in the sidebar — Fast or Personal. Always visible, switchable at any point.
-
-- Defaults to Fast for new threads
-- Mode is stored in LangGraph state and restored when a thread is reopened
-- A small indicator in the chat shows which mode was active for each response
-
-### F3 — Thread Management
-
-The sidebar shows past threads sorted by most recent activity.
-
-- Thread titles derived from the first human message (~40 chars)
-- Titles are cached, not re-queried on every render
-- "New Chat" button starts a fresh thread
-- Thread deletion is a nice-to-have but not required for V2
-
-### F4 — File Attachments
-
-Users can attach files to a thread. Content is injected into the system prompt for that thread.
-
-- Supported types: txt, md, json, pdf
-- Files are stored in the database (as text content), not on the filesystem
-- PDF text is extracted at upload time
-- Listed in the sidebar with individual delete buttons
-- Scoped to the thread — not shared across threads
-
-### F5 — Search (via Search Subagent)
-
-All web search is delegated to a dedicated search subagent. The main agent calls one tool; the subagent handles everything internally.
-
-Tools available to the search subagent:
-- **General web search** — any topic, recent sources
-- **Reddit search** — discussions and opinions
-- **Subreddit search** — targeted search within a named subreddit
-- **BuyItForLife search** — r/BuyItForLife specifically, for durable product recommendations
-
-The search subagent has its own system prompt: find relevant information, synthesize it, include source URLs. It decides which tools to call and in what order. Results are returned to the main agent as a synthesized summary, not raw search output.
-
-The main agent **enriches the query before delegating** — relevant user constraints (budget, material preferences, dietary restrictions) are included in the query passed to the subagent. The subagent never reads the user profile directly; it receives context from the main agent.
-
-All search tools use Linkup. No Reddit API credentials required.
-
-### F6 — Weather Tool
-
-Current weather for any location, using Open-Meteo (no API key required). Used by Fast mode for weather queries and by Personal mode when making outdoor or activity-related recommendations.
-
-### F6b — Shopping Subagent
-
-Product recommendations are handled by a dedicated Shopping subagent, not by direct tool calls from the main agent. The main agent calls `ask_shopping_agent` with an enriched query (product type + relevant user constraints); the subagent runs the full workflow internally and returns structured recommendation JSON.
-
-**Shopping subagent workflow:**
-1. Search for options (delegates to search subagent or runs its own search)
-2. Price comparison across retailers
-3. Price history check — "is this actually a good deal right now?"
-4. Coupon/discount lookup
-5. Synthesize into ranked recommendations matching user constraints
-
-**Tools available inside the Shopping subagent:**
-- **Price comparison** — query across major retailers, ranked by value
-- **Price history lookup** — historical price trend for a product/retailer pair
-- **Coupon/discount finder** — active discount codes for a product or retailer
-- **Barcode / product lookup** — identify a product from a barcode or name, return specs and pricing context
-
-### F6c — Food & Diet Tools
-
-- **Nutrition lookup** — query OpenFoodFacts (free, no API key) for nutritional data on a food item or ingredient. Enables macro-aware and diet-constraint-aware recommendations.
-- **Recipe search** — find recipes matching the user's current dietary constraints, preferences, and available ingredients.
-- **Restaurant finder** — find local restaurants with options matching the user's dietary preferences. Requires location context (set once in profile or provided per query).
-
-### F6d — Lifestyle Tools
-
-- **Activity recommendations** — suggest activities or exercises based on current weather, time of year, and stored user constraints (injuries, fitness level, equipment). Calls the weather tool internally.
-- **Product ownership tracker** — the user can log items they own. The agent checks this before recommending something they already have, and can surface maintenance reminders ("you've had those boots 2 years").
-
-### F7 — User Profile Tool
-
-A pair of tools available only in Personal mode:
-
-- `get_user_profile` — performs a pgvector semantic search over the user profile, returning the entries most relevant to the current query. The full profile is never injected wholesale — only what's relevant to the current request.
-- `update_user_memory` — writes a new memory item (category + description + timestamp)
-
-`get_user_profile` is called at the start of every Personal mode invocation. `update_user_memory` is called by the memory extraction background task after the response is delivered — never during the response itself.
-
-### F8 — Conversation Continuity
-
-All conversation history persists in PostgreSQL via LangGraph's PostgresSaver. Resuming a thread restores the full message history.
-
-For long threads (>20 messages), older messages are compressed into a rolling summary. The summary is stored in state and prepended to the prompt in place of the raw old messages. Full history remains in Postgres.
-
----
-
-## Interfaces
-
-There are two interfaces. They share the same backend graph — no logic is duplicated between them.
-
-### Web Frontend (Primary — Personal Mode)
-
-A proper web application built with **Next.js** (frontend) and **FastAPI** (backend). This is where Personal mode lives. Streamlit is not used — it cannot deliver the UI quality needed for recommendation cards, smooth streaming, and responsive mobile layout.
-
-**FastAPI backend:**
-- Exposes the LangGraph graph over HTTP
-- Streams token-by-token responses to the frontend via Server-Sent Events (SSE)
-- Handles file uploads, thread management, and profile reads/writes
-- Also serves the Telegram webhook from the same process
-- All LangGraph invocations happen here — the frontend never touches the graph directly
-
-**Next.js frontend:**
-- Consumes the SSE stream and renders tokens as they arrive
-- Personal mode responses render as **structured recommendation cards**: product name, price, retailer link, one-line reason, preference match indicator
-- The agent outputs structured JSON for recommendations; the frontend renders it as cards
-- **Feedback buttons** (thumbs up / thumbs down / "I bought it") appear beneath every Personal mode response
-- Thread sidebar: scrollable history sorted by recency, cached titles, "New Chat" button
-- File attachment panel: upload, list, delete — scoped per thread
-- Profile viewer: read-only summary of what the agent knows about the user, with delete controls
-- Mode toggle: Fast / Personal, visible at all times, switchable mid-conversation
-- Responsive — works on mobile browser for when Telegram isn't convenient
-
-### Telegram Bot (Primary — Fast Mode)
-
-The primary interface for Fast mode. The point of Fast mode is answering a question in under 10 seconds — that requires zero friction to invoke. A Telegram message is faster than opening any browser tab.
-
-**Scope:**
-- Fast mode is the default for all Telegram messages
-- Personal mode is available via a `/personal` command prefix, but the full recommendation experience (cards, feedback buttons, file uploads) belongs in the web frontend — Telegram delivers a text-only version
-- The bot is the delivery channel for follow-up messages and price-watch notifications (push, not pull)
-
-**Implementation:**
-- The bot handler receives a Telegram message, calls the FastAPI backend, and sends the response back — it is a thin client, not a separate backend
-- Responses stream progressively by editing the Telegram message as tokens arrive (Telegram supports message editing for this pattern)
-
-
----
-
-## Architecture Spec
-
-### Agent Graph
-
-The graph splits at the top based on mode. Fast and Personal are independent execution paths — no shared branching logic inside a single agent node.
+Every phase is implemented in a dedicated git worktree — never directly on `main`.
 
 ```
-START → route_node ──► fast_agent_node ──► fast_tools_condition ──► fast_tool_node ──► fast_agent_node ──► END
-                   │
-                   └──► summarize_node (conditional) ──► personal_agent_node ──► personal_tools_condition ──► personal_tool_node ──► personal_agent_node ──► END
-                                                                                                                                                          (memory extraction fires as background task after stream closes)
+# Claude Code: use the EnterWorktree tool before writing any code
+# Or, when delegating to a sub-agent:
+#   Agent(subagent_type="general-purpose", isolation="worktree", ...)
 ```
 
-**route_node** — reads `state.mode` and directs to the appropriate branch. No logic beyond routing.
+The worktree is created on the phase branch. All file edits, test runs, and commits happen inside it. If the phase produces no changes (e.g., the acceptance criteria already pass from a prior phase), the worktree is discarded without merging.
 
-**summarize_node** — runs conditionally before `personal_agent_node` when the thread exceeds a message threshold (e.g., 20 messages) and the summary hasn't been recently updated. Compresses old messages into a rolling summary stored in state. One-time cost when the threshold is crossed; subsequent calls skip it.
+### Branch naming
+```
+phase/<N>-<short-slug>
+```
+Examples: `phase/1-backend-foundation`, `phase/3-fast-mode`
 
-**fast_agent_node** — uses `fast_model`, minimal tool set (weather + search only), tight recursion limit (4 steps max). No memory access, no profile injection.
+### Commit messages
+Use [Conventional Commits](https://www.conventionalcommits.org/). Type prefix required. Subject ≤72 chars. Body only when the why is non-obvious.
 
-**personal_agent_node** — uses `main_model`, full tool set, recursion limit of 10. Injects user profile via pgvector at the start of each invocation (semantically relevant entries only, not the full profile). When delegating to subagents, enriches the query with relevant user constraints before passing it.
+```
+feat: add SSE streaming endpoint for chat
+fix: handle missing ANTHROPIC_API_KEY gracefully
+chore: add docker-compose with postgres and redis
+refactor: move config loading to config.py
+test: add smoke test for fast agent graph
+```
 
-**Recursion limits** — set explicitly at graph compile time. Fast: 4 (one tool call round then answer). Personal: 10 (enough for multi-step shopping/search loops). Without a limit, a misbehaving session can loop indefinitely and rack up unbounded cost.
+### Pull requests
+One PR per phase. PR title mirrors the phase goal. PR body must include:
+- **What this adds** (bullet list of deliverables)
+- **How to test** (exact commands or manual steps)
+- **Non-obvious decisions** (anything a reviewer would question)
 
-**Parallel tool execution** — when the model returns multiple tool calls in a single response, `ToolNode` executes them concurrently. Explicitly verified and enabled. Tools must be stateless and independent for this to be safe — they are.
+Never open a PR for a phase until all acceptance criteria pass locally.
 
-**Memory extraction** — runs as a FastAPI background task after the SSE stream closes, not as a graph node. It calls a separate lightweight graph (`extract_memories`) that reads the completed conversation and writes new entries to the user profile table. Zero impact on response latency.
+### Merging
+Squash-merge to `main`. The squash commit message is the PR title in conventional commit format.
 
-### Subagent Delegation
+### What never goes in a commit
+- Secrets, API keys, tokens, `.env` files
+- Dead code, commented-out blocks, unused imports
+- `print()` statements (use `logging`)
+- Files not listed in the phase's file manifest
 
-Two subagents. The threshold for a subagent is: does the task require its own multi-step reasoning loop? If yes, delegate. If it's a single API call, keep it as a direct tool.
+---
 
-**Search subagent** — handles all web search. Receives an enriched query (including relevant user constraints) from the main agent. Decides internally which tools to call (general search, Reddit, subreddit, BuyItForLife) and in what order. Returns a synthesized summary with source URLs.
+## Architecture Reference
 
-**Shopping subagent** — handles the full product recommendation workflow: search → price comparison → price history check → coupon lookup → synthesize. Receives `{query, budget, relevant_preferences}` from the main agent. Returns structured recommendation JSON. The main agent never sees the individual tool calls.
+Keep this in mind throughout all phases. Do not deviate from it.
 
-All other tools (weather, nutrition, restaurant finder, profile read/write, lifestyle) are called directly — they are single lookups with no multi-step loop.
+### Stack
+- **Backend**: FastAPI + LangGraph (Python)
+- **Frontend**: Next.js (TypeScript)
+- **DB**: PostgreSQL with pgvector extension
+- **Cache**: Redis (optional, graceful degradation)
+- **Telegram**: thin bot client, all logic in FastAPI
 
-### State
+### Graph topology
+```
+START
+  └─► route_node
+        ├─► fast_agent_node ──► [tools_condition] ──► fast_tool_node ──► fast_agent_node ──► END
+        └─► summarize_node (conditional) ──► personal_agent_node ──► [tools_condition] ──► personal_tool_node ──► personal_agent_node ──► END
+                                                                                                                    ↑
+                                                                                              memory extraction fires as FastAPI background task after stream closes
+```
 
-- `messages` — full conversation history with `add_messages` reducer
-- `mode` — current mode (`"fast"` or `"personal"`), persisted in state
-- `summary` — rolling summary of older messages when thread exceeds threshold
-- `thread_id` — carried in config, used to look up files from `thread_files` table
+### State schema (`AgentState`)
+| Field | Type | Notes |
+|---|---|---|
+| `messages` | `Annotated[list, add_messages]` | Full conversation history |
+| `mode` | `Literal["fast", "personal"]` | Persisted per thread |
+| `summary` | `str` | Rolling summary of old messages; empty string when unused |
 
-`attached_files` is **not** in state. File content is stored in a dedicated `thread_files` Postgres table and looked up by `thread_id` at the start of `personal_agent_node`. Keeping large file content in state means it gets serialized into every checkpoint on every tool call — expensive and unnecessary.
+`attached_files` is NOT in state — loaded from `thread_files` table by `thread_id` at invocation time.
 
 ### Models
+| Name | Model | Used by |
+|---|---|---|
+| `fast_model` | `gpt-4.1-mini` | Fast agent, both subagents, memory extractor |
+| `main_model` | Claude Sonnet (fallback: `gpt-4o`) | Personal agent |
+| `reasoning_model` | `o3` or Claude extended thinking | Optional; personal agent only, on judgement |
 
-Three tiers. No `max_tokens` cap.
+No `max_tokens` cap on any model. Ever.
 
-- **fast_model** — cheap and low-latency (e.g., gpt-4.1-mini). Used for Fast mode, both subagents, and the memory extraction background task.
-- **main_model** — Claude Sonnet (via `langchain-anthropic`) for Personal mode. Handles long preference-laden prompts and complex constraint satisfaction better than GPT-4o. GPT-4o is the fallback if `ANTHROPIC_API_KEY` is absent.
-- **reasoning_model** — optional path for genuinely hard queries: multi-product comparisons with many competing constraints. Triggered by the agent's own judgement, not the default. Options: o3, Claude with extended thinking. Must not fire on simple lookups.
+### Subagents
+Two subagents, each compiled as a standalone LangGraph graph and exposed as a `@tool` wrapper:
+- **Search subagent** — receives enriched query, decides which search tools to call, returns synthesized summary + source URLs
+- **Shopping subagent** — receives `{query, budget, relevant_preferences}`, runs full workflow (search → price comparison → price history → coupons → synthesize), returns structured recommendation JSON
 
-Model selection happens inside each agent node — no shared selection logic.
+Single-call tools (weather, nutrition, restaurant, profile read/write, lifestyle) are direct tool calls on the main agent — no subagent.
 
-### Configuration
+### Databases
+| Table | Purpose |
+|---|---|
+| LangGraph checkpointer tables | Conversation state per `thread_id` |
+| `user_profile` | Memory entries: `(id, category, description, embedding vector, created_at, season)` |
+| `thread_files` | Attached file content per thread: `(thread_id, filename, content, uploaded_at)` |
 
-All values from environment. The app fails with a clear error at startup if required vars are missing.
+### Config
+Load from environment. Fail fast with clear error on missing required vars. Gracefully degrade on missing optional vars. All config lives in `backend/config.py`. No other file reads `os.environ` directly.
 
-Required:
-- `OPENAI_API_KEY`
-- `DB_URI`
-
-Optional (graceful degradation if absent):
-- `LINKUP_API_KEY` — search tools not registered, agent falls back to training knowledge
-- `ANTHROPIC_API_KEY` — Personal mode falls back to GPT-4o
-- `TELEGRAM_BOT_TOKEN` — Telegram bot disabled
-- `REDIS_URL` — search caching disabled, all searches hit Linkup live
-- `LANGCHAIN_API_KEY` + `LANGCHAIN_PROJECT` — tracing disabled
-
-A `.env.example` listing all variables is committed to the repo.
-
-### FastAPI Backend
-
-- Single process serving both the HTTP API and the Telegram webhook
-- Agent and checkpointer initialized once at startup via a lifespan context manager — not per-request
-- DB table setup (checkpointer, user_profile, scheduler jobs) runs once in the same lifespan handler
-- LangGraph invocations happen inside FastAPI route handlers
-- Responses stream to the frontend via Server-Sent Events using `astream_events`
-- Python `logging` throughout — no `print` statements
-- All config from `config.py`, no circular imports
-
-### Infrastructure
-
-**pgvector** — once the user profile grows beyond a handful of entries, injecting the entire profile on every call is wasteful and eventually hits context limits. pgvector (Postgres extension) enables semantic similarity search over memory: retrieve only the entries most relevant to the current query. No external service — same Postgres instance already in use.
-
-**Redis** — search results are cached with a short TTL (6 hours). If the user asks about the same product category twice in a day, the second query hits the cache rather than Linkup. Reduces latency and API costs. Graceful degradation: if `REDIS_URL` is absent, all queries go live.
-
-**Scheduler (APScheduler)** — runs alongside the app to handle two jobs: (1) follow-up messages sent via Telegram after a recommendation (configurable delay, e.g., 1 week), (2) price-watch notifications when a tracked product drops below a threshold. Lightweight — no separate worker process needed for a personal assistant at this scale.
+Required: `OPENAI_API_KEY`, `DB_URI`  
+Optional: `ANTHROPIC_API_KEY`, `LINKUP_API_KEY`, `TELEGRAM_BOT_TOKEN`, `REDIS_URL`, `LANGCHAIN_API_KEY`, `LANGCHAIN_PROJECT`
 
 ---
 
-## What to Drop Entirely
-
-- **Streamlit** — replaced by Next.js + FastAPI
-- **Code mode** — out of scope
-- **Work/study mode** — out of scope
-- **RAG / vector search** — the university exam use case is gone; add a personal knowledge base later if needed
-- **Pinecone** — no longer needed
-- **PRAW / Reddit credentials** — Linkup handles Reddit
-- **`middleware/call_wrapping.py`** — dead code from a previous architecture
-- **`user_role` state field** — was never used
-- **Upfront mode selection screen** — replaced by sidebar toggle
-- **Hardcoded LangSmith project names and paths** — these belong in `.env`
-
----
-
-## File Structure
+## File Structure (Target State)
 
 ```
 stumberg/
 ├── backend/
-│   ├── main.py               # FastAPI app, lifespan, route definitions, SSE streaming, Telegram webhook
-│   ├── bot.py                # Telegram bot logic (thin client — calls FastAPI internally)
-│   ├── scheduler.py          # APScheduler jobs (follow-ups, price-watch notifications)
-│   ├── config.py             # Env var loading and validation (fail fast on required keys)
+│   ├── main.py               # FastAPI app, lifespan, routes, SSE, Telegram webhook
+│   ├── bot.py                # Telegram bot logic (thin client)
+│   ├── scheduler.py          # APScheduler jobs
+│   ├── config.py             # Env var loading and validation
 │   ├── graph.py              # LangGraph graph definition
 │   ├── schema.py             # AgentState TypedDict
-│   ├── models.py             # LLM client instances (fast, main, reasoning)
-│   ├── prompts.py            # System prompts for each mode
-│   ├── memory.py             # User profile read/write logic and Postgres table setup
+│   ├── models.py             # LLM client instances
+│   ├── prompts.py            # System prompts per mode
+│   ├── memory.py             # User profile table setup, read/write helpers
 │   ├── tools/
 │   │   ├── __init__.py
-│   │   ├── search.py         # Linkup search tools (general, reddit, subreddit, buyforlife)
-│   │   ├── weather.py        # Open-Meteo weather tool
-│   │   ├── shopping.py       # Price comparison, price history, coupon finder, barcode lookup
-│   │   ├── food.py           # Nutrition lookup (OpenFoodFacts), recipe search, restaurant finder
+│   │   ├── search.py         # Linkup: general, reddit, subreddit, buyforlife
+│   │   ├── weather.py        # Open-Meteo (no API key)
+│   │   ├── shopping.py       # Price comparison, price history, coupons, barcode lookup
+│   │   ├── food.py           # OpenFoodFacts nutrition, recipe search, restaurant finder
 │   │   ├── lifestyle.py      # Activity recommendations, product ownership tracker
-│   │   └── profile.py        # get_user_profile and update_user_memory tools
+│   │   └── profile.py        # get_user_profile, update_user_memory
 │   ├── subagents/
-│   │   ├── search_subagent.py    # Search subgraph — general, reddit, subreddit, buyforlife tools
-│   │   ├── shopping_subagent.py  # Shopping subgraph — search → price → history → coupon → synthesize
-│   │   └── memory_extractor.py   # Lightweight graph called as background task after Personal responses
-│   └── requirements.txt      # Pinned Python dependencies
-│
+│   │   ├── search_subagent.py
+│   │   ├── shopping_subagent.py
+│   │   └── memory_extractor.py
+│   └── requirements.txt
 ├── frontend/
-│   ├── app/                  # Next.js app directory
-│   │   ├── page.tsx          # Root — redirects to /chat
-│   │   ├── chat/
-│   │   │   └── page.tsx      # Main chat UI
-│   │   └── profile/
-│   │       └── page.tsx      # User profile viewer/editor
+│   ├── app/
+│   │   ├── page.tsx          # Redirects to /chat
+│   │   ├── chat/page.tsx     # Main chat UI
+│   │   └── profile/page.tsx  # Profile viewer/editor
 │   ├── components/
-│   │   ├── ChatThread.tsx    # Message list with streaming support
-│   │   ├── MessageBubble.tsx # Single message — plain text or recommendation card
-│   │   ├── RecommendationCard.tsx  # Product card with price, link, reason, feedback buttons
-│   │   ├── Sidebar.tsx       # Thread list, new chat, mode toggle, file panel
-│   │   ├── FilePanel.tsx     # Upload, list, delete attached files
-│   │   └── ToolStatus.tsx    # Non-blocking indicator during tool calls
-│   ├── lib/
-│   │   └── api.ts            # API client — SSE streaming, REST calls to FastAPI
+│   │   ├── ChatThread.tsx
+│   │   ├── MessageBubble.tsx
+│   │   ├── RecommendationCard.tsx
+│   │   ├── Sidebar.tsx
+│   │   ├── FilePanel.tsx
+│   │   └── ToolStatus.tsx
+│   ├── lib/api.ts
 │   ├── package.json
 │   └── tsconfig.json
-│
-├── docker-compose.yml        # Local dev: backend + frontend + postgres + redis
+├── docker-compose.yml
 ├── Dockerfile.backend
 ├── Dockerfile.frontend
 ├── .env.example
@@ -419,16 +199,366 @@ stumberg/
 
 ---
 
-## Constraints and Non-Negotiables
+## Implementation Phases
 
-- **Two modes only.** Resist adding more until the two core modes are excellent.
-- **Never truncate output.** No low `max_tokens` caps.
-- **All responses stream.** No synchronous blocking invoke calls in any UI path — SSE to the frontend, progressive message editing in Telegram.
-- **Memory must be transparent.** The user can always inspect and edit what is stored.
-- **The frontend is Next.js. The backend is FastAPI.** Not Streamlit. The UI ceiling matters.
-- **Telegram is Fast mode first.** Personal mode is available via command prefix but the full experience belongs in the web frontend.
-- **The bot is a thin client.** No LangGraph calls directly from the Telegram handler — everything goes through FastAPI.
-- **No dead code.** If it's not used, it's not in the repo.
-- **No hardcoded secrets or paths.** Everything in `.env`.
+---
+
+### Phase 0 — Repo Scaffold & Infrastructure
+
+**Goal**: A runnable local environment with Postgres + Redis, a committed `.env.example`, and the target directory structure in place. No application logic yet.
+
+**Branch**: `phase/0-scaffold`
+
+**Files to create**:
+- `docker-compose.yml` — services: `postgres` (with pgvector), `redis`, `backend` (stub), `frontend` (stub)
+- `Dockerfile.backend` — Python 3.12 slim, install requirements
+- `Dockerfile.frontend` — Node 20 alpine, install deps
+- `.env.example` — all env vars listed with placeholder values, comments on which are required vs optional
+- `.gitignore` — ignore `.env`, `__pycache__`, `node_modules`, `.next`, `*.pyc`
+- `backend/requirements.txt` — pinned dependencies: `fastapi`, `uvicorn`, `langgraph`, `langchain`, `langchain-openai`, `langchain-anthropic`, `psycopg[binary,pool]`, `langgraph-checkpoint-postgres`, `pgvector`, `redis`, `apscheduler`, `python-telegram-bot`, `linkup-sdk`, `pypdf2`, `python-dotenv`
+- `backend/config.py` — load env vars, validate required keys at import time, raise `RuntimeError` with clear message if missing
+- `backend/__init__.py`, `backend/tools/__init__.py`, `backend/subagents/__init__.py`
+- `frontend/package.json` — Next.js 14, TypeScript, Tailwind
+- `frontend/tsconfig.json`
+
+**Acceptance criteria**:
+- `docker-compose up` starts all four services without errors
+- Postgres is reachable at `DB_URI` from outside the container
+- Redis is reachable at `REDIS_URL`
+- `python -c "from backend.config import config"` exits 0 when all required vars are set
+- `python -c "from backend.config import config"` raises `RuntimeError` with the missing var name when `OPENAI_API_KEY` is unset
+- `.env` is not tracked by git (`git status` shows clean after adding a `.env` file)
+
+**PR title**: `chore: scaffold project structure and local dev infrastructure`
+
+---
+
+### Phase 1 — Backend Foundation
+
+**Goal**: A FastAPI application that starts, connects to Postgres, and has the DB tables initialized. No agent logic yet — just the server skeleton.
+
+**Branch**: `phase/1-backend-foundation`
+
+**Files to create/modify**:
+- `backend/main.py` — FastAPI app with lifespan context manager. In lifespan: initialize DB connection pool, run `checkpointer.setup()`, create `user_profile` and `thread_files` tables (via `memory.py`). Log startup completion.
+- `backend/memory.py` — `setup_tables(conn)` that creates `user_profile` (id, category, description, embedding vector(1536), created_at, season) and `thread_files` (thread_id, filename, content, uploaded_at). Also `get_profile_entries(conn, query_embedding, limit)` and `write_profile_entry(conn, category, description, embedding)` stubs (full logic in Phase 4).
+- `backend/schema.py` — `AgentState` TypedDict: `messages`, `mode`, `summary`
+- `backend/models.py` — instantiate `fast_model`, `main_model`, `reasoning_model`. `main_model` uses Anthropic if `ANTHROPIC_API_KEY` is present, otherwise falls back to GPT-4o. Log which model is used for `main_model` at startup.
+
+**Acceptance criteria**:
+- `uvicorn backend.main:app --reload` starts without errors when all required env vars are set
+- `GET /health` returns `{"status": "ok"}`
+- `user_profile` and `thread_files` tables exist in Postgres after startup (verify with `psql`)
+- Starting without `ANTHROPIC_API_KEY` logs "Anthropic key absent, Personal mode using GPT-4o" and continues
+- Starting without `OPENAI_API_KEY` raises `RuntimeError` before the server binds
+
+**PR title**: `feat: FastAPI app skeleton with DB initialization and model setup`
+
+---
+
+### Phase 2 — Core Graph (Routing + Fast Agent)
+
+**Goal**: The LangGraph graph with `route_node`, `fast_agent_node`, and the state schema wired up. Fast mode works end-to-end for simple factual questions with no tools. Personal mode stub routes correctly but returns a placeholder.
+
+**Branch**: `phase/2-core-graph`
+
+**Files to create/modify**:
+- `backend/graph.py` — define `StateGraph(AgentState)`. Add `route_node` (reads `state["mode"]`, routes to `fast_agent_node` or `personal_agent_node`). Add `fast_agent_node` (uses `fast_model`, no tools yet, recursion limit 4). Add `personal_agent_node` stub (returns placeholder message). Compile with `PostgresSaver`. Export `graph`.
+- `backend/prompts.py` — `get_system_prompt(mode: str) -> str`. Fast mode: terse factual assistant, one sentence if possible, no intro. Personal mode: recommendation assistant with user memory injection placeholder.
+- `backend/main.py` — add `POST /chat` route that invokes `graph.ainvoke()` and returns the last AI message. (Streaming added in Phase 5.)
+
+**Acceptance criteria**:
+- `POST /chat` with `{"thread_id": "t1", "mode": "fast", "message": "What is 2+2?"}` returns a short answer containing "4"
+- `POST /chat` with `mode: "personal"` returns the placeholder string "Personal mode not yet implemented"
+- Thread state persists: sending a follow-up in the same `thread_id` includes prior messages in context (verify by asking "what did I just ask?" after an initial question)
+- `graph.py` has no `max_tokens` on any model call
+- No `print()` statements; logging only
+
+**PR title**: `feat: LangGraph graph with routing and functional fast agent node`
+
+---
+
+### Phase 3 — Fast Mode: Tools
+
+**Goal**: Fast mode has its full tool set — weather and search subagent. The search subagent is a standalone graph delegating to Linkup tools.
+
+**Branch**: `phase/3-fast-tools`
+
+**Files to create/modify**:
+- `backend/tools/weather.py` — `get_weather(location: str) -> str` tool using Open-Meteo API (no key required). Returns current conditions and temperature.
+- `backend/tools/search.py` — four Linkup-backed tools: `general_search(query)`, `reddit_search(query)`, `subreddit_search(query, subreddit)`, `buyforlife_search(query)`. If `LINKUP_API_KEY` is absent, each tool returns `"Search unavailable: LINKUP_API_KEY not set"` — do not raise.
+- `backend/subagents/search_subagent.py` — `SearchAgentState` (messages only). Graph: `search_agent_node` (fast_model + all four search tools) → tools_condition → tool_node → back to agent. Compile. Expose as `ask_search_agent(query: str) -> str` tool that invokes the subgraph and returns the last AI message.
+- `backend/graph.py` — bind `get_weather` and `ask_search_agent` to `fast_agent_node`. Apply recursion limit of 4. Fast agent system prompt instructs: use search only when question requires current information; use training knowledge otherwise.
+
+**Acceptance criteria**:
+- `POST /chat` with `mode: fast`, message `"What's the weather in Oslo?"` calls `get_weather` and returns current conditions
+- `POST /chat` with `mode: fast`, message `"What year was the Eiffel Tower built?"` answers from training data without calling any tool (verify via LangSmith trace or log)
+- `POST /chat` with `mode: fast`, message `"Find Reddit opinions on Uniqlo merino wool"` calls `ask_search_agent`, which internally calls `reddit_search`, and returns a synthesized response
+- When `LINKUP_API_KEY` is absent, Fast mode still answers factual questions; search queries return the degraded message and the agent states it cannot search
+- All four Linkup tools are registered on the search subagent only — not directly on the fast agent
+
+**PR title**: `feat: fast mode tools — weather, search subagent with Linkup`
+
+---
+
+### Phase 4 — User Memory System
+
+**Goal**: The `user_profile` table is live with pgvector similarity search. `get_user_profile` and `update_user_memory` tools work. A user can read and write profile entries via the API.
+
+**Branch**: `phase/4-user-memory`
+
+**Files to create/modify**:
+- `backend/memory.py` — implement `get_profile_entries(conn, query_embedding, limit=10)` using pgvector `<=>` operator for cosine similarity. Implement `write_profile_entry(conn, category, description, embedding, season)`. Embeddings generated via OpenAI `text-embedding-3-small`.
+- `backend/tools/profile.py` — `get_user_profile(query: str) -> str` tool: generates embedding from query, calls `get_profile_entries`, formats results as readable text. `update_user_memory(category: str, description: str) -> str` tool: generates embedding, calls `write_profile_entry`. Categories must be one of `preference`, `constraint`, `feedback`.
+- `backend/main.py` — add `GET /profile` (returns all profile entries, sorted by `created_at` desc) and `DELETE /profile/{entry_id}` routes.
+
+**Acceptance criteria**:
+- `POST /profile/entry` with `{"category": "preference", "description": "prefers merino wool over synthetic fabrics"}` inserts a row in `user_profile` with a non-null embedding vector
+- `GET /profile` returns the inserted entry
+- `GET /profile/search?q=fabric preferences` returns the merino entry ranked first (cosine similarity)
+- `DELETE /profile/{id}` removes the entry
+- Querying with a semantically unrelated string (e.g., `q=weather in Oslo`) does not return the merino entry in position 1
+- `update_user_memory` called with an invalid category raises a `ValueError` before writing
+
+**PR title**: `feat: user memory system with pgvector semantic search`
+
+---
+
+### Phase 5 — Personal Mode: Agent + Streaming
+
+**Goal**: Personal mode is fully functional. The personal agent node injects relevant user profile entries, has the full tool set, and responses stream via SSE. The summarization node fires correctly on long threads.
+
+**Branch**: `phase/5-personal-mode`
+
+**Files to create/modify**:
+- `backend/graph.py`:
+  - Add `summarize_node`: runs when `len(state["messages"]) > 20` and `state["summary"]` is stale. Uses `fast_model` to compress old messages into a rolling summary. Stores result in `state["summary"]`. Old messages truncated to the summary + last 5 messages.
+  - Implement `personal_agent_node`: loads relevant profile entries via `get_user_profile` (semantic search against the current query), prepends to system prompt, uses `main_model`, recursion limit 10. Binds tools: `get_user_profile`, `update_user_memory`, `get_weather`, `ask_search_agent`.
+  - Wire `summarize_node` → `personal_agent_node` in the graph with correct conditional edge.
+- `backend/main.py` — replace `POST /chat` synchronous invoke with SSE streaming via `astream_events`. Stream `on_chat_model_stream` events as `data: {"token": "..."}`. Stream `on_tool_start` events as `data: {"tool_status": "Searching Reddit..."}`. End stream with `data: {"done": true}`.
+
+**Tool status messages** (shown during tool calls):
+- `ask_search_agent` → `"Searching..."`
+- `ask_shopping_agent` → `"Comparing prices..."`
+- `get_weather` → `"Checking weather..."`
+- `get_user_profile` → `"Reading your profile..."`
+
+**Acceptance criteria**:
+- `POST /chat` (SSE) with `mode: personal`, `"recommend a durable winter jacket under €200"` streams tokens progressively — first token arrives before full response is ready
+- After inserting a preference entry (`"prefers merino wool"`), a fresh personal mode query about clothing applies that constraint without the user stating it (visible in the response text)
+- After 21+ messages in a thread, `summarize_node` fires once and stores a non-empty `state["summary"]`; subsequent messages use the summary and the last 5 messages
+- Tool status SSE events appear before the token stream begins
+- Fast mode path does not call `summarize_node` or `get_user_profile`
+
+**PR title**: `feat: personal agent node with profile injection, summarization, and SSE streaming`
+
+---
+
+### Phase 6 — Shopping & Lifestyle Tools + Shopping Subagent
+
+**Goal**: Personal mode has the full specialized tool set: Shopping subagent (price comparison, history, coupons), food tools, and lifestyle tools.
+
+**Branch**: `phase/6-specialized-tools`
+
+**Files to create/modify**:
+- `backend/tools/shopping.py`:
+  - `compare_prices(product: str) -> str` — query major retailers via Linkup, return ranked price list
+  - `price_history(product: str, retailer: str) -> str` — return historical price trend summary
+  - `find_coupons(product_or_retailer: str) -> str` — return active discount codes
+  - `barcode_lookup(barcode: str) -> str` — return product name, specs, pricing context
+- `backend/subagents/shopping_subagent.py` — `ShoppingAgentState` (messages only). Graph runs: search → price_comparison → price_history → coupon_finder → synthesize. Expose as `ask_shopping_agent(query: str, budget: str, preferences: str) -> str` tool returning structured JSON: `{best_pick: {...}, alternatives: [{...}], deal_quality: "..."}`.
+- `backend/tools/food.py`:
+  - `nutrition_lookup(food_item: str) -> str` — OpenFoodFacts API, no key required
+  - `recipe_search(ingredients: str, dietary_constraints: str) -> str` — Linkup-based
+  - `restaurant_finder(location: str, dietary_preferences: str) -> str` — Linkup-based
+- `backend/tools/lifestyle.py`:
+  - `activity_recommendations(constraints: str) -> str` — calls weather tool internally, returns activity suggestions
+  - `log_owned_product(product_name: str, purchase_date: str) -> str` — writes to `user_profile` as `feedback` category entry
+  - `get_owned_products() -> str` — returns list of logged owned products
+- `backend/graph.py` — bind all new tools to `personal_agent_node`. Add `ask_shopping_agent` to personal tools.
+
+**Acceptance criteria**:
+- `POST /chat` (SSE), `mode: personal`, `"find me a good mechanical keyboard under €100"` invokes `ask_shopping_agent`, which internally runs the full shopping workflow, and the response includes a ranked recommendation with price and retailer
+- `POST /chat`, `"nutrition info for Greek yogurt"` calls `nutrition_lookup` and returns macro data
+- `POST /chat`, `"log that I own a Bellroy wallet, bought last month"` calls `log_owned_product` and confirms storage
+- A follow-up `"what products do I own?"` calls `get_owned_products` and lists the Bellroy wallet
+- Shopping subagent tools are not directly accessible from the fast agent
+
+**PR title**: `feat: shopping subagent, food tools, and lifestyle tools for personal mode`
+
+---
+
+### Phase 7 — Memory Extraction Background Task
+
+**Goal**: After every Personal mode response, a lightweight background task reviews the exchange and writes any new preference/constraint/feedback entries to `user_profile` automatically.
+
+**Branch**: `phase/7-memory-extraction`
+
+**Files to create/modify**:
+- `backend/subagents/memory_extractor.py` — `extract_memories(conversation: list[dict]) -> list[dict]` function (not a graph — a direct LLM call). Uses `fast_model`. Prompt: given the conversation excerpt, identify any new preferences, constraints, or feedback signals. Return as JSON array `[{category, description}]`. Empty array if nothing worth storing.
+- `backend/main.py` — after the SSE stream closes, schedule `extract_and_store_memories(thread_id, conversation)` as a FastAPI `BackgroundTask`. This calls `extract_memories`, then calls `write_profile_entry` for each result. Runs after response delivery — zero latency impact.
+
+**Test cases to verify extraction logic** (manual, via curl or Python script):
+| Conversation excerpt | Expected extracted entry |
+|---|---|
+| User: "I hate synthetic fabrics, always give me natural materials" | `{category: "preference", description: "dislikes synthetic fabrics, prefers natural materials"}` |
+| User: "I bought the jacket you recommended, loved it" | `{category: "feedback", description: "bought and loved recommended jacket"}` |
+| User: "my budget for headphones is max €80" | `{category: "constraint", description: "budget ceiling for headphones: €80"}` |
+| User: "what's 2+2?" (Fast mode conversation) | `[]` — extractor not called for Fast mode |
+
+**Acceptance criteria**:
+- A Personal mode conversation containing `"I'm vegetarian"` results in a new `user_profile` entry with `category=constraint` and description mentioning vegetarian within 5 seconds of the response ending
+- The background task does not block the SSE stream — the stream closes normally and the extraction runs after
+- Fast mode conversations do not trigger extraction
+- Extractor runs once per response, not per token
+
+**PR title**: `feat: background memory extraction after personal mode responses`
+
+---
+
+### Phase 8 — Next.js Frontend: Chat + Streaming
+
+**Goal**: A functional web UI with a chat thread, SSE streaming rendering, mode toggle, and thread sidebar. No recommendation cards yet — plain text rendering only.
+
+**Branch**: `phase/8-frontend-core`
+
+**Files to create/modify**:
+- `frontend/lib/api.ts` — `streamChat(params): AsyncGenerator` consuming the SSE stream. `getThreads()`, `createThread()` REST calls.
+- `frontend/components/ChatThread.tsx` — renders message list. New tokens appended in real-time during streaming. Displays tool status messages while tools run.
+- `frontend/components/MessageBubble.tsx` — single message: user bubble (right-aligned) or assistant bubble (left-aligned). Plain text for now.
+- `frontend/components/ToolStatus.tsx` — inline indicator showing tool status text during tool calls (e.g., "Searching Reddit..."). Disappears when streaming begins.
+- `frontend/components/Sidebar.tsx` — thread list sorted by most recent activity, thread titles from first message (≤40 chars), "New Chat" button, mode toggle (Fast / Personal).
+- `frontend/app/chat/page.tsx` — assembles all components. Handles `thread_id` in URL params.
+- `frontend/app/page.tsx` — redirects to `/chat`.
+
+**Acceptance criteria**:
+- Loading `/chat` shows an empty thread with a text input
+- Sending "What is the capital of France?" in Fast mode streams the response token by token — text visibly appears progressively
+- Mode toggle switches between Fast and Personal; the active mode is visually indicated
+- Starting a new chat creates a new thread; the old thread appears in the sidebar
+- Refreshing the page and clicking a past thread restores its message history
+- Tool status text (e.g., "Searching...") appears and then is replaced by the streaming response
+
+**PR title**: `feat: Next.js chat frontend with SSE streaming and thread sidebar`
+
+---
+
+### Phase 9 — Frontend: Recommendation Cards, Feedback Buttons, File Attachments, Profile Viewer
+
+**Goal**: Personal mode renders structured recommendation cards. Feedback buttons appear on every Personal response. File uploads work. The profile page shows stored memories.
+
+**Branch**: `phase/9-frontend-complete`
+
+**Files to create/modify**:
+- `backend/main.py` — add `POST /files/{thread_id}` (upload file, extract PDF text, store in `thread_files`), `GET /files/{thread_id}` (list files), `DELETE /files/{thread_id}/{filename}`. Inject file content into personal agent's system prompt at invocation time (load from `thread_files` by `thread_id`).
+- `frontend/components/RecommendationCard.tsx` — renders the structured JSON from `ask_shopping_agent`: product name, price, retailer link, one-line reason, preference match indicator. Thumbs up / thumbs down / "I bought it" buttons below the card. Clicking a button sends `POST /feedback` with `{thread_id, message_id, signal: "up"|"down"|"purchased"}`.
+- `backend/main.py` — add `POST /feedback` route that calls `write_profile_entry` with the appropriate feedback category.
+- `frontend/components/MessageBubble.tsx` — detect if message content is recommendation JSON (starts with `{`), render as `RecommendationCard` if so, otherwise plain text.
+- `frontend/components/FilePanel.tsx` — upload button (accepts txt, md, json, pdf), list of uploaded files with delete buttons. Integrated into `Sidebar.tsx`.
+- `frontend/app/profile/page.tsx` — fetches `GET /profile`, renders grouped by category (Preferences, Constraints, Feedback). Each entry has a delete button (`DELETE /profile/{id}`).
+
+**Acceptance criteria**:
+- A Personal mode recommendation response (from shopping subagent) renders as a card with product name, price, and clickable retailer link
+- Thumbs down button on a card sends a feedback entry visible in `/profile`
+- Uploading a `.txt` file to a thread and then asking a question about its content produces an answer that uses the file content
+- Uploading a `.pdf` extracts text and behaves the same as `.txt`
+- `/profile` page lists all stored entries grouped by category
+- Deleting an entry on `/profile` removes it from the list without a page refresh
+
+**PR title**: `feat: recommendation cards, feedback buttons, file attachments, profile viewer`
+
+---
+
+### Phase 10 — Telegram Bot
+
+**Goal**: A working Telegram bot that handles Fast mode as the default and Personal mode via `/personal` prefix. All logic goes through FastAPI — the bot is a thin relay.
+
+**Branch**: `phase/10-telegram`
+
+**Files to create/modify**:
+- `backend/bot.py` — `python-telegram-bot` application. On receiving a message: strip `/personal` prefix to determine mode, call `POST /chat` (SSE stream), edit the Telegram message progressively as tokens arrive (Telegram's `editMessageText` pattern). Handle `/start` with a brief description. Handle `/forget` as a shortcut to clear profile.
+- `backend/main.py` — register `POST /webhook/telegram` endpoint. In lifespan, set Telegram webhook URL if `TELEGRAM_BOT_TOKEN` is present; skip silently if absent.
+
+**Acceptance criteria**:
+- Sending "what is 2+2?" in Telegram returns a correct Fast mode answer in under 5 seconds
+- Sending `/personal recommend a durable leather belt` triggers Personal mode and returns a recommendation (may be slower)
+- Messages stream progressively via Telegram message edits (send, then edit as tokens arrive)
+- Without `TELEGRAM_BOT_TOKEN`, the backend starts normally and `/webhook/telegram` returns 404
+
+**PR title**: `feat: Telegram bot as thin client for fast and personal mode`
+
+---
+
+### Phase 11 — Scheduler: Follow-ups and Price Watching
+
+**Goal**: APScheduler runs inside the FastAPI process. Two jobs: follow-up messages (send a Telegram message N days after a recommendation) and price-watch notifications.
+
+**Branch**: `phase/11-scheduler`
+
+**Files to create/modify**:
+- `backend/scheduler.py` — `AsyncIOScheduler` initialized in the FastAPI lifespan. Two job types:
+  - `schedule_followup(thread_id, product_name, delay_days)` — sends a Telegram message after `delay_days` asking how the recommendation worked out. Writes result to `user_profile` as feedback.
+  - `schedule_price_watch(product_name, target_price, chat_id)` — polls price comparison tool on a configurable interval; sends Telegram alert if price drops below threshold.
+- `backend/main.py` — `POST /scheduler/followup` and `POST /scheduler/pricewatch` routes. Both require `TELEGRAM_BOT_TOKEN` to be set.
+
+**Acceptance criteria**:
+- `POST /scheduler/followup` with `delay_days: 0` (immediate) sends a Telegram message within 10 seconds
+- `POST /scheduler/pricewatch` creates a job visible in APScheduler job list
+- Without `TELEGRAM_BOT_TOKEN`, both routes return `503 Service Unavailable` with `{"error": "Telegram not configured"}`
+- Scheduler does not prevent clean server shutdown
+
+**PR title**: `feat: APScheduler jobs for follow-up messages and price watch notifications`
+
+---
+
+### Phase 12 — Hardening & Cleanup
+
+**Goal**: The app is production-ready. All graceful degradation paths tested. No dead code. Docker build is clean. `.env.example` is complete.
+
+**Branch**: `phase/12-hardening`
+
+**Checklist** (all must pass before PR):
+
+**Startup tests** (run each with the env var absent or set to an invalid value):
+- [ ] `OPENAI_API_KEY` missing → server refuses to start with clear error
+- [ ] `DB_URI` missing → server refuses to start with clear error
+- [ ] `ANTHROPIC_API_KEY` missing → Personal mode uses GPT-4o, logs warning at startup
+- [ ] `LINKUP_API_KEY` missing → search tools return degraded message, app continues
+- [ ] `REDIS_URL` missing → search caching disabled, app continues
+- [ ] `TELEGRAM_BOT_TOKEN` missing → bot disabled, webhook route returns 404
+
+**Functional smoke tests** (via curl or pytest):
+- [ ] Fast mode: factual question answered correctly
+- [ ] Fast mode: weather query calls Open-Meteo
+- [ ] Fast mode: search query calls search subagent (requires `LINKUP_API_KEY`)
+- [ ] Personal mode: recommendation query injects profile, calls shopping subagent
+- [ ] Personal mode: memory is extracted and stored after a conversation containing a preference statement
+- [ ] Profile: write, read, semantic search, delete all work
+- [ ] Thread: history persists across server restart
+
+**Code quality**:
+- [ ] Zero `print()` statements in Python code
+- [ ] Zero hardcoded secrets, paths, or model names outside `config.py` and `models.py`
+- [ ] Zero dead code (unused functions, commented-out blocks, unused imports)
+- [ ] `requirements.txt` has pinned versions for all dependencies
+- [ ] `docker-compose up --build` produces a working stack from a clean clone with only a `.env` file
+
+**PR title**: `chore: hardening, graceful degradation tests, and cleanup`
+
+---
+
+## Non-Negotiables
+
+These are constraints that cannot be traded off against delivery speed. If implementing something would require violating one of these, stop and flag it before proceeding.
+
+- **Two modes only.** No Work mode, no Code mode, no Study mode. Do not add them.
+- **Never truncate output.** No `max_tokens` cap anywhere.
+- **All responses stream.** No blocking `.invoke()` in any UI-facing code path.
+- **Memory is transparent.** The user can always see, edit, and delete what is stored.
+- **The bot is a thin client.** No graph calls from `bot.py` — everything through FastAPI.
+- **No dead code.** If it is not used, delete it.
+- **No hardcoded secrets.** Every key, path, and model name lives in `.env`.
 - **Graceful degradation.** Missing optional keys reduce capability, they do not crash the app.
-- **`docker-compose.yml` covers full local dev.** No manual Postgres or Redis setup required to run the project.
+- **`docker-compose up` is the only setup step.** No manual DB or Redis setup.
+- **Conventional Commits on every commit.** No exceptions.
+- **No Streamlit.** It is gone. Do not reference it.
